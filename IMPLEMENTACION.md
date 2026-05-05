@@ -11,7 +11,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 0 | Diseno base y contratos | Completada | 2026-05-05 | 2026-05-05 | Estructura inicial, docs, contratos base y convenciones de eventos. |
 | Fase 1 | Nucleo hexagonal de ingesta | Completada | 2026-05-05 | 2026-05-05 | Dominio, DTOs, puertos y caso de uso testeable validados con Go en ruta explicita. |
 | Fase 2 | API HTTP de ingesta | Completada | 2026-05-05 | 2026-05-05 | Endpoint `POST /v1/events`, JWT HS256, Redis Stream, rate limit Redis y bootstrap conectados. |
-| Fase 3 | Nucleo hexagonal del worker | Pendiente |  |  | Procesamiento testeable sin Redis ni PostgreSQL. |
+| Fase 3 | Nucleo hexagonal del worker | Completada | 2026-05-05 | 2026-05-05 | Procesamiento testeable sin Redis ni PostgreSQL. |
 | Fase 4 | Worker con Redis Stream y PostgreSQL | Pendiente |  |  | Consumer, validacion, rehidratacion y persistencia con adaptadores PostgreSQL. |
 | Fase 5 | Base PostgreSQL analytics | Parcial | 2026-05-05 |  | Migraciones e indices base creados; faltan golang-migrate, repositorios pgx e insercion batch. |
 | Fase 6 | SDK TypeScript | Parcial | 2026-05-05 |  | Paquete, TypeScript, build y README inicial creados; falta cliente funcional. |
@@ -56,12 +56,12 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 3 - Nucleo hexagonal del worker
 
-- [ ] Completar dominio de site.
-- [ ] Completar dominio de rechazo.
-- [ ] Implementar `ProcessEventsUseCase`.
-- [ ] Implementar validacion de site.
-- [ ] Implementar rehidratacion como caso de uso.
-- [ ] Agregar tests unitarios con fakes.
+- [x] Completar dominio de site.
+- [x] Completar dominio de rechazo.
+- [x] Implementar `ProcessEventsUseCase`.
+- [x] Implementar validacion de site.
+- [x] Implementar rehidratacion como caso de uso.
+- [x] Agregar tests unitarios con fakes.
 
 ## Fase 4 - Worker con Redis Stream y PostgreSQL
 
