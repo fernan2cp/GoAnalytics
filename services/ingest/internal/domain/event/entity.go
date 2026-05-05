@@ -13,6 +13,10 @@ import "time"
 // representan mediante validaciones externas del dominio o caso de uso.
 type RawEvent struct {
 	EventID      string
+	SitePublicID string
+	Environment  string
+	TokenVersion int
+	JWTID        string
 	EventName    string
 	EventVersion int
 	EventTime    time.Time

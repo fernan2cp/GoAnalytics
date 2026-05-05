@@ -9,7 +9,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase | Objetivo | Estado | Fecha de inicio | Fecha de cierre | Notas |
 |---|---|---|---|---|---|
 | Fase 0 | Diseno base y contratos | En progreso | 2026-05-05 |  | Estructura inicial, docs y contratos base. |
-| Fase 1 | Nucleo hexagonal de ingesta | Pendiente |  |  | Dominio, DTOs, puertos y caso de uso testeable. |
+| Fase 1 | Nucleo hexagonal de ingesta | En progreso | 2026-05-05 |  | Dominio, DTOs, puertos y caso de uso testeable implementados; falta validar con Go disponible en PATH. |
 | Fase 2 | API HTTP de ingesta | Pendiente |  |  | Endpoint `POST /v1/events`, JWT y Redis Stream. |
 | Fase 3 | Nucleo hexagonal del worker | Pendiente |  |  | Procesamiento testeable sin Redis ni PostgreSQL. |
 | Fase 4 | Worker con Redis Stream y PostgreSQL | Pendiente |  |  | Consumer, validacion, rehidratacion y persistencia. |
@@ -35,13 +35,13 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 1 - Nucleo hexagonal de ingesta
 
-- [ ] Crear reglas de dominio de evento.
-- [ ] Crear reglas de dominio de token.
-- [ ] Completar DTOs de aplicacion.
-- [ ] Completar puerto inbound `IngestEvents`.
-- [ ] Completar puertos outbound.
-- [ ] Implementar `IngestEventsUseCase`.
-- [ ] Agregar tests unitarios con fakes.
+- [x] Crear reglas de dominio de evento.
+- [x] Crear reglas de dominio de token.
+- [x] Completar DTOs de aplicacion.
+- [x] Completar puerto inbound `IngestEvents`.
+- [x] Completar puertos outbound.
+- [x] Implementar `IngestEventsUseCase`.
+- [x] Agregar tests unitarios con fakes.
 
 ## Fase 2 - API HTTP de ingesta
 
