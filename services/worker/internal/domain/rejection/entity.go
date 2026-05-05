@@ -13,7 +13,7 @@ import "time"
 // rechazo.
 type RejectedEvent struct {
 	EventID      string
-	SitePublicID string
+	SiteCode     string
 	Environment  string
 	Reason       string
 	Severity     string

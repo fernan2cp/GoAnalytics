@@ -14,7 +14,7 @@ import "time"
 type TrackingClaims struct {
 	Issuer       string
 	Audience     string
-	SitePublicID string
+	SiteCode     string
 	Environment  string
 	TokenVersion int
 	IssuedAt     time.Time

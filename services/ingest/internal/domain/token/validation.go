@@ -23,7 +23,7 @@ var ErrInvalidTrackingClaims = errors.New("claims de tracking invalidos")
 // Debe llamarse desde la capa de aplicación después de EventTokenVerifier. La
 // firma, algoritmo y parseo del JWT pertenecen al adaptador outbound.
 func (claims TrackingClaims) Validate(now time.Time) error {
-	if strings.TrimSpace(claims.SitePublicID) == "" {
+	if strings.TrimSpace(claims.SiteCode) == "" {
 		return ErrInvalidTrackingClaims
 	}
 	if strings.TrimSpace(claims.Environment) == "" {

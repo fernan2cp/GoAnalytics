@@ -588,7 +588,7 @@ Responsabilidades:
 - Validar claims mínimos.
 - Validar tamaño del payload.
 - Validar cantidad máxima de eventos por batch.
-- Aplicar rate limit básico por site_public_id, IP o token.
+- Aplicar rate limit básico por site_code, IP o token.
 - Publicar evento enriquecido en Redis Stream.
 - Responder 204 rápidamente.
 ```
@@ -694,7 +694,7 @@ Para Fase 1 se puede implementar primero HS256 por simplicidad, pero dejando pre
 {
   "iss": "main-backend",
   "aud": "analytics-ingest",
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "env": "production",
   "token_version": 1,
   "iat": 1710000000,
@@ -717,7 +717,7 @@ Recomendación:
 
 ```text
 No exponer tenant_id y site_id internos como campos principales.
-Usar site_public_id como identificador público.
+Usar site_code como identificador público.
 Resolver tenant_id y site_id reales desde Redis.
 ```
 
@@ -827,14 +827,14 @@ SITE_CACHE_TTL_SECONDS=3600
 Clave:
 
 ```text
-goanalytics:site:public:{site_public_id}
+goanalytics:site:public:{site_code}
 ```
 
 Valor:
 
 ```json
 {
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "tenant_id": "tenant_123",
   "site_id": "site_456",
   "status": "active",
@@ -855,7 +855,7 @@ Valor:
 ### 15.2 Cooldown de rehidratación
 
 ```text
-goanalytics:rehydrate:last_attempt:{site_public_id}
+goanalytics:rehydrate:last_attempt:{site_code}
 ```
 
 TTL:
@@ -869,7 +869,7 @@ SITE_REHYDRATE_COOLDOWN_SECONDS
 ### 15.3 Negative cache
 
 ```text
-goanalytics:site:not_found:{site_public_id}
+goanalytics:site:not_found:{site_code}
 ```
 
 TTL:
@@ -883,7 +883,7 @@ SITE_NEGATIVE_CACHE_TTL_SECONDS
 ### 15.4 Rate limit
 
 ```text
-goanalytics:ratelimit:site:{site_public_id}:{minute}
+goanalytics:ratelimit:site:{site_code}:{minute}
 goanalytics:ratelimit:ip:{ip_hash}:{minute}
 ```
 
@@ -909,7 +909,7 @@ Content-Type: application/json
 
 ```json
 {
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "origin": "https://cliente.com",
   "env": "production"
 }
@@ -919,7 +919,7 @@ Content-Type: application/json
 
 ```json
 {
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "tenant_id": "tenant_123",
   "site_id": "site_456",
   "status": "active",
@@ -1007,7 +1007,7 @@ Después de validar el JWT, Go Ingestion debe enriquecer el evento con datos del
 ```json
 {
   "event_id": "018f9b8e-0000-7000-a000-000000000001",
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "env": "production",
   "token_version": 1,
   "jwt_id": "01HV...",
@@ -1044,7 +1044,7 @@ CREATE TABLE analytics_events (
 
     tenant_id TEXT NOT NULL,
     site_id TEXT NOT NULL,
-    site_public_id TEXT NOT NULL,
+    site_code TEXT NOT NULL,
 
     env TEXT NOT NULL DEFAULT 'production',
 
@@ -1102,7 +1102,7 @@ CREATE TABLE analytics_rejected_events (
     id BIGSERIAL PRIMARY KEY,
 
     event_id TEXT,
-    site_public_id TEXT,
+    site_code TEXT,
     env TEXT,
 
     reason TEXT NOT NULL,
@@ -1118,7 +1118,7 @@ CREATE TABLE analytics_rejected_events (
 );
 
 CREATE INDEX ix_analytics_rejected_events_site_time
-ON analytics_rejected_events(site_public_id, created_at DESC);
+ON analytics_rejected_events(site_code, created_at DESC);
 
 CREATE INDEX ix_analytics_rejected_events_reason
 ON analytics_rejected_events(reason);
@@ -1138,7 +1138,7 @@ ON analytics_rejected_events(reason);
 - iss permitido.
 - exp vigente.
 - nbf válido.
-- site_public_id presente.
+- site_code presente.
 - token_version presente.
 - event_name válido.
 - Cantidad de eventos dentro del límite.
@@ -1170,7 +1170,7 @@ document
 ### 20.2 Validaciones en Worker
 
 ```text
-- site_public_id existe en Redis.
+- site_code existe en Redis.
 - Si no existe, intentar rehidratación.
 - tenant_id y site_id reales existen en metadata.
 - status = active.
@@ -1579,7 +1579,7 @@ Reducir superficie de ataque y abuso externo.
 ```text
 1. Validar CORS.
 2. Validar Origin/Referer.
-3. Implementar rate limit por site_public_id.
+3. Implementar rate limit por site_code.
 4. Implementar rate limit por IP.
 5. Implementar límite de tamaño de payload.
 6. Implementar límite de eventos por batch.
@@ -1859,7 +1859,7 @@ La primera versión completa del sistema debe implementar:
 - Arquitectura hexagonal desde el inicio.
 - JWT firmado sin cifrado mediante adaptador de infraestructura.
 - Expiración inicial de 30 minutos configurable.
-- site_public_id como identificador público.
+- site_code como identificador público.
 - Redis como cache de validación en fases de infraestructura.
 - Redis Stream como cola inicial en fases de infraestructura.
 - Worker Go para persistencia en fases de worker.

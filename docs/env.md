@@ -12,9 +12,9 @@ Las variables base estan documentadas en `.env.example`.
 ## Redis
 
 ```text
-goanalytics:site:public:{site_public_id}
-goanalytics:rehydrate:last_attempt:{site_public_id}
-goanalytics:site:not_found:{site_public_id}
-goanalytics:ratelimit:site:{site_public_id}:{minute}
+goanalytics:site:public:{site_code}
+goanalytics:rehydrate:last_attempt:{site_code}
+goanalytics:site:not_found:{site_code}
+goanalytics:ratelimit:site:{site_code}:{minute}
 goanalytics:ratelimit:ip:{ip_hash}:{minute}
 ```

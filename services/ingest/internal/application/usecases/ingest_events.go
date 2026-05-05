@@ -125,7 +125,7 @@ func (uc *IngestEventsUseCase) Ingest(ctx context.Context, request dto.IngestReq
 		return dto.IngestResponse{}, fmt.Errorf("%w: %v", ErrInvalidToken, err)
 	}
 
-	if err := uc.applyRateLimits(ctx, claims.SitePublicID, request.IPHash); err != nil {
+	if err := uc.applyRateLimits(ctx, claims.SiteCode, request.IPHash); err != nil {
 		return dto.IngestResponse{}, err
 	}
 
@@ -133,7 +133,7 @@ func (uc *IngestEventsUseCase) Ingest(ctx context.Context, request dto.IngestReq
 	for _, item := range request.Events {
 		raw := event.RawEvent{
 			EventID:      item.EventID,
-			SitePublicID: claims.SitePublicID,
+			SiteCode:     claims.SiteCode,
 			Environment:  claims.Environment,
 			TokenVersion: claims.TokenVersion,
 			JWTID:        claims.JWTID,
@@ -197,9 +197,9 @@ func (uc *IngestEventsUseCase) ensureDependencies() error {
 // Recibe identidad publica de site e IP hasheada. Devuelve ErrInvalidPayload
 // cuando falta una clave necesaria, ErrRateLimitExceeded cuando el limite se
 // agota o el error de infraestructura devuelto por el puerto.
-func (uc *IngestEventsUseCase) applyRateLimits(ctx context.Context, sitePublicID string, ipHash string) error {
+func (uc *IngestEventsUseCase) applyRateLimits(ctx context.Context, siteCode string, ipHash string) error {
 	if uc.options.SiteRateLimit > 0 {
-		allowed, err := uc.rateLimiter.Allow(ctx, "site:"+sitePublicID, uc.options.SiteRateLimit, uc.options.RateLimitWindow)
+		allowed, err := uc.rateLimiter.Allow(ctx, "site:"+siteCode, uc.options.SiteRateLimit, uc.options.RateLimitWindow)
 		if err != nil {
 			return err
 		}

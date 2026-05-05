@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     event_id UUID NOT NULL,
     tenant_id TEXT NOT NULL,
     site_id TEXT NOT NULL,
-    site_public_id TEXT NOT NULL,
+    site_code TEXT NOT NULL,
     env TEXT NOT NULL DEFAULT 'production',
     event_name TEXT NOT NULL,
     event_version INTEGER NOT NULL DEFAULT 1,

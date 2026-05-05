@@ -25,7 +25,7 @@ func ValidateRawEvent(raw RawEvent) error {
 	if strings.TrimSpace(raw.EventID) == "" {
 		return ErrInvalidRawEvent
 	}
-	if strings.TrimSpace(raw.SitePublicID) == "" {
+	if strings.TrimSpace(raw.SiteCode) == "" {
 		return ErrInvalidRawEvent
 	}
 	if strings.TrimSpace(raw.Environment) == "" {

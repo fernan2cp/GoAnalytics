@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS analytics_rejected_events (
     id BIGSERIAL PRIMARY KEY,
     event_id TEXT,
-    site_public_id TEXT,
+    tenant_id TEXT,
+    site_code TEXT,
     env TEXT,
     reason TEXT NOT NULL,
     severity TEXT NOT NULL DEFAULT 'warning',
@@ -14,7 +15,7 @@ CREATE TABLE IF NOT EXISTS analytics_rejected_events (
 );
 
 CREATE INDEX IF NOT EXISTS ix_analytics_rejected_events_site_time
-ON analytics_rejected_events(site_public_id, created_at DESC);
+ON analytics_rejected_events(tenant_id, site_code, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS ix_analytics_rejected_events_reason
 ON analytics_rejected_events(reason);

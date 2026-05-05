@@ -38,8 +38,8 @@ func TestIngestValidPublishesEnrichedEvents(t *testing.T) {
 	if published.IPHash != "ip_hash_123" {
 		t.Fatalf("IPHash = %q, want ip_hash_123", published.IPHash)
 	}
-	if published.SitePublicID != "pub_site_abc123" || published.Environment != "production" {
-		t.Fatalf("claims de site = %q/%q, want pub_site_abc123/production", published.SitePublicID, published.Environment)
+	if published.SiteCode != "pub_site_abc123" || published.Environment != "production" {
+		t.Fatalf("claims de site = %q/%q, want pub_site_abc123/production", published.SiteCode, published.Environment)
 	}
 	if published.JWTID != "jti_123" || published.TokenVersion != 1 {
 		t.Fatalf("claims de token = %q/%d, want jti_123/1", published.JWTID, published.TokenVersion)
@@ -75,7 +75,7 @@ func TestIngestInvalidTokenStopsBeforeLimitsAndPublish(t *testing.T) {
 func TestIngestRejectsInvalidClaimsAsInvalidToken(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	claims := validClaims(now)
-	claims.SitePublicID = ""
+	claims.SiteCode = ""
 	useCase := newUseCaseWithClaims(now, &fakePublisher{}, &fakeRateLimiter{allow: true}, claims, nil)
 
 	_, err := useCase.Ingest(context.Background(), validRequest())
@@ -220,7 +220,7 @@ func validClaims(now time.Time) token.TrackingClaims {
 	return token.TrackingClaims{
 		Issuer:       "main-backend",
 		Audience:     "analytics-ingest",
-		SitePublicID: "pub_site_abc123",
+		SiteCode: "pub_site_abc123",
 		Environment:  "production",
 		TokenVersion: 1,
 		IssuedAt:     now.Add(-time.Minute),

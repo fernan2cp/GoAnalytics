@@ -15,7 +15,7 @@ type ValidatedEvent struct {
 	EventID      string
 	TenantID     string
 	SiteID       string
-	SitePublicID string
+	SiteCode     string
 	Environment  string
 	EventName    string
 	EventVersion int

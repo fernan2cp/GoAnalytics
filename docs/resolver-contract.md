@@ -12,7 +12,7 @@ Content-Type: application/json
 
 ```json
 {
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "origin": "https://cliente.com",
   "env": "production"
 }
@@ -22,7 +22,7 @@ Content-Type: application/json
 
 ```json
 {
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "tenant_id": "tenant_123",
   "site_id": "site_456",
   "status": "active",

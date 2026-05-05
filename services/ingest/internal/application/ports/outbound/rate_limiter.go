@@ -12,7 +12,7 @@ import (
 // el limite y error si la infraestructura de conteo falla.
 //
 // Debe implementarse en adaptadores outbound. El caso de uso decide que claves
-// usar, por ejemplo site_public_id o IP hasheada.
+// usar, por ejemplo site_code o IP hasheada.
 type RateLimiter interface {
 	Allow(ctx context.Context, key string, limit int, window time.Duration) (bool, error)
 }

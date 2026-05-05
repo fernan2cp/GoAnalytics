@@ -10,7 +10,7 @@ package site
 // documentado. No devuelve errores por si mismo; las fallas aparecen al
 // obtenerlo o validarlo.
 type SiteConfig struct {
-	SitePublicID    string
+	SiteCode        string
 	TenantID        string
 	SiteID          string
 	Status          string

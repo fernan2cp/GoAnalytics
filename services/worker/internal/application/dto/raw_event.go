@@ -12,7 +12,7 @@ import "time"
 // devuelve errores; las validaciones ocurren en application y domain.
 type RawEvent struct {
 	EventID      string
-	SitePublicID string
+	SiteCode     string
 	Environment  string
 	TokenVersion int
 	JWTID        string

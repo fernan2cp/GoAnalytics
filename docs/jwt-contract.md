@@ -10,7 +10,7 @@ El algoritmo inicial de infraestructura es HS256 y se implementa en Fase 2 detra
 {
   "iss": "main-backend",
   "aud": "analytics-ingest",
-  "site_public_id": "pub_site_abc123",
+  "site_code": "pub_site_abc123",
   "env": "production",
   "token_version": 1,
   "iat": 1710000000,
