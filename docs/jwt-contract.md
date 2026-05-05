@@ -1,6 +1,8 @@
 # Contrato JWT
 
-En Fase 1 Go Analytics usa JWT firmado sin cifrado. El algoritmo inicial es HS256, detras del puerto `EventTokenVerifier`, para permitir RS256 o ES256 mas adelante.
+Go Analytics usa JWT firmado sin cifrado. Fase 1 define el puerto `EventTokenVerifier`, el DTO de claims y las reglas de validacion de claims que el nucleo de ingesta necesita.
+
+El algoritmo inicial de infraestructura es HS256 y se implementa en Fase 2 detras de `EventTokenVerifier`, para permitir RS256 o ES256 mas adelante sin cambiar el caso de uso.
 
 ## Claims obligatorios
 

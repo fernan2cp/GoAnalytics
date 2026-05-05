@@ -1,5 +1,7 @@
 # Contrato de eventos
 
+Las reglas de nombres, versionado, propiedades y claves sensibles estan en `docs/event-conventions.md`.
+
 ## Endpoint de ingesta
 
 ```http

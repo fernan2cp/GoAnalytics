@@ -17,12 +17,12 @@ import (
 // Permiten que los adaptadores inbound traduzcan fallas a respuestas externas
 // sin conocer detalles de dominio ni de infraestructura concreta.
 var (
-	ErrInvalidToken       = errors.New("token de ingesta invalido")
-	ErrInvalidPayload     = errors.New("payload de ingesta invalido")
-	ErrInvalidBatch       = errors.New("batch de ingesta invalido")
-	ErrRateLimitExceeded  = errors.New("limite de ingesta excedido")
-	ErrPublishFailed      = errors.New("publicacion de eventos fallida")
-	ErrDependencyMissing  = errors.New("dependencia de ingesta faltante")
+	ErrInvalidToken      = errors.New("token de ingesta invalido")
+	ErrInvalidPayload    = errors.New("payload de ingesta invalido")
+	ErrInvalidBatch      = errors.New("batch de ingesta invalido")
+	ErrRateLimitExceeded = errors.New("limite de ingesta excedido")
+	ErrPublishFailed     = errors.New("publicacion de eventos fallida")
+	ErrDependencyMissing = errors.New("dependencia de ingesta faltante")
 )
 
 // IngestOptions define la politica configurable del caso de uso de ingesta.

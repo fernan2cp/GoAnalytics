@@ -37,6 +37,8 @@ make down
 
 - `docs/architecture.md`
 - `docs/hexagonal-architecture.md`
+- `docs/event-conventions.md`
+- `docs/persistence.md`
 - `docs/jwt-contract.md`
 - `docs/event-contract.md`
 - `docs/resolver-contract.md`
