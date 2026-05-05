@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 // main inicia el entrypoint del worker de Go Analytics.
@@ -15,6 +17,13 @@ import (
 // inicializacion devuelve error, escribe el mensaje en stderr y finaliza con
 // codigo distinto de cero.
 func main() {
+	envFile := os.Getenv("ENV_FILE")
+	if envFile != "" {
+		if err := godotenv.Load(envFile); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not load env file %s: %v\n", envFile, err)
+		}
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "go-analytics-worker: %v\n", err)
 		os.Exit(1)

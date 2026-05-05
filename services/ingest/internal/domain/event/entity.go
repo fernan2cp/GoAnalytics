@@ -12,26 +12,26 @@ import "time"
 // contiene comportamiento ni devuelve errores; las condiciones invalidas se
 // representan mediante validaciones externas del dominio o caso de uso.
 type RawEvent struct {
-	EventID      string
-	SiteCode     string
-	Environment  string
-	TokenVersion int
-	JWTID        string
-	EventName    string
-	EventVersion int
-	EventTime    time.Time
-	ReceivedAt   time.Time
-	AnonymousID  string
-	SessionID    string
-	UserID       *string
-	Origin       string
-	URL          string
-	Path         string
-	Referrer     string
-	UserAgent    string
-	IPHash       string
-	SDKName      string
-	SDKVersion   string
-	Properties   map[string]any
-	Context      map[string]any
+	EventID      string         `json:"event_id"`
+	SiteCode     string         `json:"site_code"`
+	Environment  string         `json:"env"`
+	TokenVersion int            `json:"token_version"`
+	JWTID        string         `json:"jwt_id"`
+	EventName    string         `json:"event_name"`
+	EventVersion int            `json:"event_version"`
+	EventTime    time.Time      `json:"event_time"`
+	ReceivedAt   time.Time      `json:"received_at"`
+	AnonymousID  string         `json:"anonymous_id"`
+	SessionID    string         `json:"session_id"`
+	UserID       *string        `json:"user_id"`
+	Origin       string         `json:"origin"`
+	URL          string         `json:"url"`
+	Path         string         `json:"path"`
+	Referrer     string         `json:"referrer"`
+	UserAgent    string         `json:"user_agent"`
+	IPHash       string         `json:"ip_hash"`
+	SDKName      string         `json:"sdk_name"`
+	SDKVersion   string         `json:"sdk_version"`
+	Properties   map[string]any `json:"properties"`
+	Context      map[string]any `json:"context"`
 }

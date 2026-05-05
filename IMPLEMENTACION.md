@@ -10,7 +10,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 |---|---|---|---|---|---|
 | Fase 0 | Diseno base y contratos | Completada | 2026-05-05 | 2026-05-05 | Estructura inicial, docs, contratos base y convenciones de eventos. |
 | Fase 1 | Nucleo hexagonal de ingesta | Completada | 2026-05-05 | 2026-05-05 | Dominio, DTOs, puertos y caso de uso testeable validados con Go en ruta explicita. |
-| Fase 2 | API HTTP de ingesta | Pendiente |  |  | Endpoint `POST /v1/events`, JWT y Redis Stream. |
+| Fase 2 | API HTTP de ingesta | Completada | 2026-05-05 | 2026-05-05 | Endpoint `POST /v1/events`, JWT HS256, Redis Stream, rate limit Redis y bootstrap conectados. |
 | Fase 3 | Nucleo hexagonal del worker | Pendiente |  |  | Procesamiento testeable sin Redis ni PostgreSQL. |
 | Fase 4 | Worker con Redis Stream y PostgreSQL | Pendiente |  |  | Consumer, validacion, rehidratacion y persistencia con adaptadores PostgreSQL. |
 | Fase 5 | Base PostgreSQL analytics | Parcial | 2026-05-05 |  | Migraciones e indices base creados; faltan golang-migrate, repositorios pgx e insercion batch. |
@@ -45,14 +45,14 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 2 - API HTTP de ingesta
 
-- [ ] Implementar carga de configuracion.
-- [ ] Implementar `POST /v1/events`.
-- [ ] Implementar middleware de request id.
-- [ ] Implementar logs estructurados.
-- [ ] Implementar adaptador JWT HS256.
-- [ ] Implementar publisher Redis Stream.
-- [ ] Implementar rate limiter Redis.
-- [ ] Conectar bootstrap.
+- [x] Implementar carga de configuracion.
+- [x] Implementar `POST /v1/events`.
+- [x] Implementar middleware de request id.
+- [x] Implementar logs estructurados.
+- [x] Implementar adaptador JWT HS256.
+- [x] Implementar publisher Redis Stream.
+- [x] Implementar rate limiter Redis.
+- [x] Conectar bootstrap.
 
 ## Fase 3 - Nucleo hexagonal del worker
 
@@ -118,8 +118,8 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [ ] Validar Origin/Referer.
 - [x] Definir rate limit por site en el nucleo de ingesta.
 - [x] Definir rate limit por IP en el nucleo de ingesta.
-- [ ] Implementar rate limit Redis por site.
-- [ ] Implementar rate limit Redis por IP.
+- [x] Implementar rate limit Redis por site.
+- [x] Implementar rate limit Redis por IP.
 - [ ] Bloquear claves sensibles.
 - [ ] Guardar IP hasheada, nunca cruda.
 
