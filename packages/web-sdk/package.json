@@ -1,0 +1,29 @@
+{
+  "name": "@go-analytics/web-sdk",
+  "version": "0.1.0",
+  "description": "SDK web generico para tracking de eventos con Go Analytics",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "test": "echo \"Sin tests del SDK todavia\""
+  },
+  "keywords": [
+    "analytics",
+    "events",
+    "tracking",
+    "sdk"
+  ],
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,3 @@
+display_name: Go Analytics Standards
+short_description: Aplica idioma espanol y GoDoc completo en Go Analytics.
+default_prompt: Usa los estandares de Go Analytics para documentar y revisar codigo y Markdown del proyecto.

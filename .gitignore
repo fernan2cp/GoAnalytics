@@ -2,3 +2,29 @@
 *.exe
 *.test
 *.out
+
+# Go
+bin/
+coverage.out
+
+# Node / SDK
+node_modules/
+dist/
+.turbo/
+
+# Env and local data
+.env
+.env.*
+!.env.example
+data/
+
+# AI agent auxiliary files
+.codex/*
+!.codex/skills/
+!.codex/skills/**
+.claude/
+.cursor/
+.continue/
+.aider*
+.windsurf/
+AGENTS.local.md
