@@ -1040,7 +1040,7 @@ Después de validar el JWT, Go Ingestion debe enriquecer el evento con datos del
 ```sql
 CREATE TABLE analytics_events (
     id BIGSERIAL PRIMARY KEY,
-    event_id UUID NOT NULL,
+    event_id TEXT NOT NULL,
 
     tenant_id TEXT NOT NULL,
     site_id TEXT NOT NULL,

@@ -64,7 +64,36 @@ func NewProcessEventsUseCase(
 	clock outbound.Clock,
 	logger outbound.Logger,
 ) *ProcessEventsUseCase {
-	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, RehydrateSiteOptions{})
+	return NewProcessEventsUseCaseWithOptions(
+		consumer,
+		eventRepository,
+		rejectedRepository,
+		siteCache,
+		siteResolver,
+		deduplicator,
+		clock,
+		logger,
+		RehydrateSiteOptions{},
+	)
+}
+
+// NewProcessEventsUseCaseWithOptions crea el caso de uso con opciones.
+//
+// Recibe los mismos puertos que NewProcessEventsUseCase y opciones de
+// rehidratacion para ajustar TTL de cache desde bootstrap. Devuelve una
+// instancia lista para procesar batches.
+func NewProcessEventsUseCaseWithOptions(
+	consumer outbound.EventConsumer,
+	eventRepository outbound.EventRepository,
+	rejectedRepository outbound.RejectedEventRepository,
+	siteCache outbound.SiteCache,
+	siteResolver outbound.SiteResolver,
+	deduplicator outbound.Deduplicator,
+	clock outbound.Clock,
+	logger outbound.Logger,
+	rehydrateOptions RehydrateSiteOptions,
+) *ProcessEventsUseCase {
+	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, rehydrateOptions)
 	return &ProcessEventsUseCase{
 		consumer:           consumer,
 		eventRepository:    eventRepository,

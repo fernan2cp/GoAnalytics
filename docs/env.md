@@ -15,6 +15,7 @@ Las variables base estan documentadas en `.env.example`.
 goanalytics:site:public:{site_code}
 goanalytics:rehydrate:last_attempt:{site_code}
 goanalytics:site:not_found:{site_code}
+goanalytics:dedup:event:{event_id}
 goanalytics:ratelimit:site:{site_code}:{minute}
 goanalytics:ratelimit:ip:{ip_hash}:{minute}
 ```

@@ -12,8 +12,8 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 1 | Nucleo hexagonal de ingesta | Completada | 2026-05-05 | 2026-05-05 | Dominio, DTOs, puertos y caso de uso testeable validados con Go en ruta explicita. |
 | Fase 2 | API HTTP de ingesta | Completada | 2026-05-05 | 2026-05-05 | Endpoint `POST /v1/events`, JWT HS256, Redis Stream, rate limit Redis y bootstrap conectados. |
 | Fase 3 | Nucleo hexagonal del worker | Completada | 2026-05-05 | 2026-05-05 | Procesamiento testeable sin Redis ni PostgreSQL. |
-| Fase 4 | Worker con Redis Stream y PostgreSQL | Pendiente |  |  | Consumer, validacion, rehidratacion y persistencia con adaptadores PostgreSQL. |
-| Fase 5 | Base PostgreSQL analytics | Parcial | 2026-05-05 |  | Migraciones e indices base creados; faltan golang-migrate, repositorios pgx e insercion batch. |
+| Fase 4 | Worker con Redis Stream y PostgreSQL | Completada | 2026-05-05 | 2026-05-05 | Consumer Redis Stream, cache/resolver, cooldown, negative cache, repositorios pgx y deduplicacion conectados. |
+| Fase 5 | Base PostgreSQL analytics | Parcial | 2026-05-05 |  | Migraciones e indices base creados; repositorios pgx e insercion batch implementados; falta golang-migrate. |
 | Fase 6 | SDK TypeScript | Parcial | 2026-05-05 |  | Paquete, TypeScript, build y README inicial creados; falta cliente funcional. |
 | Fase 7 | Docker y entorno local | Parcial | 2026-05-05 |  | Compose levanta Redis y PostgreSQL con healthchecks; faltan servicios Go y Dockerfiles. |
 | Fase 8 | Integracion con backend principal | Pendiente |  |  | JWT, hidratacion Redis y resolver interno. |
@@ -65,15 +65,15 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 4 - Worker con Redis Stream y PostgreSQL
 
-- [ ] Implementar consumer Redis Stream.
-- [ ] Implementar lectura por batches.
-- [ ] Implementar site cache Redis.
-- [ ] Implementar resolver HTTP.
-- [ ] Implementar cooldown de rehidratacion.
-- [ ] Implementar negative cache.
-- [ ] Implementar conexion PostgreSQL en bootstrap del worker con `pgxpool`.
-- [ ] Implementar repositorios PostgreSQL con `pgx`.
-- [ ] Implementar deduplicacion por `event_id`.
+- [x] Implementar consumer Redis Stream.
+- [x] Implementar lectura por batches.
+- [x] Implementar site cache Redis.
+- [x] Implementar resolver HTTP.
+- [x] Implementar cooldown de rehidratacion.
+- [x] Implementar negative cache.
+- [x] Implementar conexion PostgreSQL en bootstrap del worker con `pgxpool`.
+- [x] Implementar repositorios PostgreSQL con `pgx`.
+- [x] Implementar deduplicacion por `event_id`.
 
 ## Fase 5 - Base PostgreSQL analytics
 
@@ -81,7 +81,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Crear migracion de `analytics_rejected_events`.
 - [x] Crear indices base.
 - [ ] Configurar ejecucion de migraciones con `golang-migrate`.
-- [ ] Implementar insercion batch.
+- [x] Implementar insercion batch.
 
 ## Fase 6 - SDK TypeScript
 

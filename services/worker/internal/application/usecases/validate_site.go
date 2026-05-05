@@ -63,7 +63,7 @@ func (uc *ValidateSiteUseCase) Validate(ctx context.Context, raw dto.RawEvent) (
 
 	config, found, err := uc.siteCache.GetByPublicID(ctx, raw.SiteCode)
 	if err != nil {
-		return site.SiteConfig{}, err
+		return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteNotAvailable, err)
 	}
 	if !found {
 		config, err = uc.rehydrateSite.Rehydrate(ctx, raw.SiteCode, raw.Origin, raw.Environment)

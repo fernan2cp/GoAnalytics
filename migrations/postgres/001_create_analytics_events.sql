@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS analytics_events (
     id BIGSERIAL PRIMARY KEY,
-    event_id UUID NOT NULL,
+    event_id TEXT NOT NULL,
     tenant_id TEXT NOT NULL,
     site_id TEXT NOT NULL,
     site_code TEXT NOT NULL,
