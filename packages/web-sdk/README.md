@@ -45,3 +45,36 @@ type AnalyticsClientOptions = {
 ```
 
 El SDK genera `event_id`, `anonymous_id` persistente y `session_id` automaticamente. Nunca firma tokens ni conoce secretos.
+
+## Desarrollo e Instalación
+
+### Generar el SDK (Build)
+
+Para compilar el SDK y generar los archivos de distribución:
+
+```bash
+cd packages/web-sdk
+npm install
+npm run build
+```
+
+Esto generará la carpeta `dist/` necesaria para que el paquete sea funcional.
+
+### Opciones de Instalación en otros proyectos
+
+#### 1. Uso Local (npm link)
+Ideal para desarrollo en la misma máquina:
+- En `packages/web-sdk`: `npm link`
+- En tu proyecto: `npm link @go-analytics/web-sdk`
+
+#### 2. Instalación desde Git
+Puedes instalar el SDK directamente desde el repositorio sin publicarlo en npm:
+```bash
+npm install github:fernan2cp/GoAnalytics#main:packages/web-sdk
+```
+
+#### 3. Publicación en Registro (npm)
+Si tienes permisos, puedes publicarlo para uso general:
+```bash
+npm publish --access public
+```
