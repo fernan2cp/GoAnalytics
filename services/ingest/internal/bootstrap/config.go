@@ -23,7 +23,7 @@ type Config struct {
 	HTTPPort int
 
 	JWTAlgorithm         string
-	JWTSecret            string
+	GoAnalyticsJWTSecret string
 	JWTIssuer            string
 	JWTAudience          string
 	JWTExpirationMinutes int
@@ -62,7 +62,7 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		HTTPHost: getEnv("INGEST_HTTP_HOST", "0.0.0.0"),
 
 		JWTAlgorithm:         getEnv("JWT_ALGORITHM", "HS256"),
-		JWTSecret:            getEnv("JWT_SECRET", ""),
+		GoAnalyticsJWTSecret: getEnv("GO_ANALYTICS_JWT_SECRET", ""),
 		JWTIssuer:            getEnv("JWT_ISSUER", "main-backend"),
 		JWTAudience:          getEnv("JWT_AUDIENCE", "analytics-ingest"),
 		JWTExpirationMinutes: 30,

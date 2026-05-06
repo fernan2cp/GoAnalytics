@@ -29,4 +29,6 @@ El algoritmo inicial de infraestructura es HS256 y se implementa en Fase 2 detra
 }
 ```
 
+El secreto compartido para HS256 se configura con `GO_ANALYTICS_JWT_SECRET`.
+
 La expiracion inicial recomendada es de 30 minutos y se configura con `JWT_EXPIRATION_MINUTES`.

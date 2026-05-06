@@ -225,7 +225,7 @@ En un **proyecto multitenant**, el backend debe generar este payload de manera *
 | `ExpiresAt` | `exp` | Integer | **Dinámico** | Timestamp Unix de expiración (en segundos). |
 | `TenantHint` | `tenant_hint` | String | **Dinámico** | (Opcional) El ID interno del tenant. Altamente recomendado en multitenant. |
 | `SiteHint` | `site_hint` | String | **Dinámico** | (Opcional) El ID interno del sitio. Altamente recomendado en multitenant. |
-| `JWTID` | `jti` | String | **Dinámico** | (Opcional) Un identificador único para el token. |
+| `JWTID` | `jti` | String | **Dinámico** | Identificador único obligatorio del token. |
 
 > **Importante para Multitenant:** El uso de `tenant_hint` y `site_hint` permite que Go Analytics procese los eventos de forma mucho más rápida al evitar búsquedas complejas para resolver a qué tenant pertenece el `site_code`.
 
@@ -243,6 +243,7 @@ Ejemplo de cómo debería verse el JSON generado por el backend para el tenant "
   "iat": 1715012345,
   "nbf": 1715012345,
   "exp": 1715014145,
+  "jti": "01HXTRACKINGTOKEN123",
   "tenant_hint": "tenant_123",
   "site_hint": "site_456"
 }

@@ -45,7 +45,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		return nil, fmt.Errorf("redis no disponible: %w", err)
 	}
 
-	tokenVerifier, err := jwtadapter.NewHS256Verifier(config.JWTSecret, config.JWTIssuer, config.JWTAudience, config.JWTMaxLifetime())
+	tokenVerifier, err := jwtadapter.NewHS256Verifier(config.GoAnalyticsJWTSecret, config.JWTIssuer, config.JWTAudience, config.JWTMaxLifetime())
 	if err != nil {
 		return nil, err
 	}

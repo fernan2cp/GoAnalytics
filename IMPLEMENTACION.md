@@ -106,11 +106,15 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 8 - Integracion con backend principal
 
-- [ ] Generar JWT desde backend principal.
-- [ ] Entregar tracking token al frontend.
-- [ ] Hidratar Redis con metadata de site.
-- [ ] Implementar resolver interno compatible.
-- [ ] Probar rehidratacion automatica.
+**Verificación realizada en proyecto de integración según:**
+- [Instrucciones de integración mínima](docs/integration/instrucciones-integracion-go-analytics-minimo.md)
+- [Agent para backend principal](docs/integration/agent-backend-principal.md)
+- [Verificación Fase 8](docs/integration/verificacion-fase-8-backend-principal.md)
+- [x] Generar JWT desde backend principal.
+- [x] Entregar tracking token al frontend.
+- [x] Hidratar Redis con metadata de site.
+- [x] Implementar resolver interno compatible.
+- [x] Probar rehidratacion automatica.
 
 ## Fase 9 - Seguridad y hardening
 
