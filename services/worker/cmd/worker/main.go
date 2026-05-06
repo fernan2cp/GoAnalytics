@@ -32,10 +32,13 @@ func main() {
 	}
 
 	postgres_host := os.Getenv("POSTGRES_HOST")
+	postgres_db := os.Getenv("POSTGRES_DB")
 	if postgres_host == "" {
 		fmt.Fprintf(os.Stderr, "Postgres Host NO Inicializado")
+	} else if postgres_db == "" {
+		fmt.Fprintf(os.Stderr, "DB Name faltante")
 	} else {
-		fmt.Fprintf(os.Stderr, "postgres_host: %s\n", postgres_host)
+		fmt.Fprintf(os.Stdout, "postgres_host: %s postgres_db: %s\n", postgres_host, postgres_db)
 	}
 
 	if err := run(); err != nil {

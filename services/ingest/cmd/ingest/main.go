@@ -35,14 +35,14 @@ func main() {
 	if app_env == "" {
 		fmt.Fprintf(os.Stderr, "Sistema NO Inicializado")
 	} else {
-		fmt.Fprintf(os.Stderr, "Sistema inicializado en %s - redis: %s\n", app_env)
+		fmt.Fprintf(os.Stdout, "Sistema inicializado en %s\n", app_env)
 	}
 
 	redis_addr := os.Getenv("REDIS_ADDR")
 	if redis_addr == "" {
 		fmt.Fprintf(os.Stderr, "Redis NO Inicializado")
 	} else {
-		fmt.Fprintf(os.Stderr, "Redis addr: %s\n", redis_addr)
+		fmt.Fprintf(os.Stdout, "Redis addr: %s\n", redis_addr)
 	}
 
 	if err := run(); err != nil {
