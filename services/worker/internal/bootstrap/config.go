@@ -25,6 +25,8 @@ type Config struct {
 	WorkerConsumerGroup string
 	WorkerBatchSize     int
 	WorkerPollInterval  time.Duration
+	HealthHTTPHost      string
+	HealthHTTPPort      int
 
 	RedisAddr     string
 	RedisUsername string
@@ -68,6 +70,7 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		WorkerConsumerGroup: getEnv("WORKER_CONSUMER_GROUP", "go-analytics-workers"),
 		WorkerBatchSize:     500,
 		WorkerPollInterval:  time.Second,
+		HealthHTTPHost:      getEnv("WORKER_HEALTH_HTTP_HOST", "0.0.0.0"),
 
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisUsername: getEnv("REDIS_USERNAME", ""),
@@ -104,6 +107,9 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.WorkerPollInterval, err = getEnvMillis("WORKER_POLL_INTERVAL_MS", config.WorkerPollInterval); err != nil {
 		return Config{}, err
 	}
+	if config.HealthHTTPPort, err = getEnvInt("WORKER_HEALTH_HTTP_PORT", 8081); err != nil {
+		return Config{}, err
+	}
 	if config.SiteResolverTimeout, err = getEnvMillis("SITE_RESOLVER_TIMEOUT_MS", config.SiteResolverTimeout); err != nil {
 		return Config{}, err
 	}
@@ -120,6 +126,14 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+// HealthAddress devuelve la direccion HTTP operativa host:port del worker.
+//
+// No recibe parametros y combina los campos HealthHTTPHost y HealthHTTPPort de
+// Config. Se usa solo para endpoints de health/readiness.
+func (config Config) HealthAddress() string {
+	return net.JoinHostPort(config.HealthHTTPHost, strconv.Itoa(config.HealthHTTPPort))
 }
 
 // PostgresDSN devuelve la cadena de conexion para pgxpool.

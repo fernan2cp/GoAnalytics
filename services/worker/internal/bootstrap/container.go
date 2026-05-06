@@ -3,10 +3,12 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	nethttp "net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	goredis "github.com/redis/go-redis/v9"
 
+	"goanalytics/services/worker/internal/adapters/inbound/httphealth"
 	"goanalytics/services/worker/internal/adapters/inbound/redisstream"
 	"goanalytics/services/worker/internal/adapters/outbound/httpresolver"
 	loggeradapter "goanalytics/services/worker/internal/adapters/outbound/logger"
@@ -28,6 +30,7 @@ type Container struct {
 	Postgres    *pgxpool.Pool
 	Logger      outbound.Logger
 	Consumer    inbound.EventConsumer
+	Health      nethttp.Handler
 }
 
 // NewContainer inicializa adaptadores y caso de uso del worker.
@@ -108,6 +111,12 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 	if err != nil {
 		return nil, err
 	}
+	readyHandler := httphealth.NewReadyHandler(func(ctx context.Context) error {
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			return err
+		}
+		return pgPool.Ping(ctx)
+	})
 
 	return &Container{
 		Config:      config,
@@ -115,6 +124,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		Postgres:    pgPool,
 		Logger:      appLogger,
 		Consumer:    consumer,
+		Health:      httphealth.NewRouter(httphealth.NewHealthHandler(), readyHandler),
 	}, nil
 }
 

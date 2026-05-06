@@ -1,19 +1,31 @@
-.PHONY: test tidy up up down migrate-up migrate-down migrate-force
+ifeq ($(OS),Windows_NT)
+GO ?= C:/Program Files/Go/bin/go.exe
+else
+GO ?= go
+endif
+
+.PHONY: test tidy up down logs logs-follow migrate-up migrate-down migrate-force
 
 test:
-	cd services/ingest && go test ./...
-	cd services/worker && go test ./...
+	cd services/ingest && "$(GO)" test ./...
+	cd services/worker && "$(GO)" test ./...
 
 tidy:
-	cd services/ingest && go mod tidy
-	cd services/worker && go mod tidy
-	go work sync
+	cd services/ingest && "$(GO)" mod tidy
+	cd services/worker && "$(GO)" mod tidy
+	"$(GO)" work sync
 
 up:
 	docker compose up -d
 
 down:
 	docker compose down
+
+logs:
+	docker compose logs --tail=100
+
+logs-follow:
+	docker compose logs -f
 
 migrate-up:
 	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" up

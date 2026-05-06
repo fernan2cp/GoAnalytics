@@ -80,12 +80,15 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		},
 	)
 	eventsHandler := inboundhttp.NewIngestHandler(useCase, appLogger, config.MaxEventPayloadBytes, config.HideAuthFailures)
+	readyHandler := inboundhttp.NewReadyHandler(func(ctx context.Context) error {
+		return redisClient.Ping(ctx).Err()
+	})
 
 	return &Container{
 		Config:      config,
 		RedisClient: redisClient,
 		Logger:      appLogger,
-		Handler:     inboundhttp.NewRouter(eventsHandler),
+		Handler:     inboundhttp.NewRouter(eventsHandler, inboundhttp.NewHealthHandler(), readyHandler),
 	}, nil
 }
 

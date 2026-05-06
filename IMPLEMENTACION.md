@@ -15,7 +15,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 4 | Worker con Redis Stream y PostgreSQL | Completada | 2026-05-05 | 2026-05-05 | Consumer Redis Stream, cache/resolver, cooldown, negative cache, repositorios pgx y deduplicacion conectados. |
 | Fase 5 | Base PostgreSQL analytics | Completada | 2026-05-05 | 2026-05-05 | Migraciones `up/down`, indices base, repositorios pgx, insercion batch y ejecucion con `golang-migrate` configurados. |
 | Fase 6 | SDK TypeScript | Completada | 2026-05-05 | 2026-05-05 | Cliente funcional con `track`, `page`, `identify`, queue, batching, `fetch keepalive`, soporte opcional de `sendBeacon` y tipos exportados. |
-| Fase 7 | Docker y entorno local | Parcial | 2026-05-05 |  | Compose levanta Redis y PostgreSQL con healthchecks; faltan servicios Go y Dockerfiles. |
+| Fase 7 | Docker y entorno local | Completada | 2026-05-05 | 2026-05-06 | Dockerfiles, servicios Go en Compose, healthchecks HTTP y Makefile validados. |
 | Fase 8 | Integracion con backend principal | Pendiente |  |  | JWT, hidratacion Redis y resolver interno. |
 | Fase 9 | Seguridad y hardening | Parcial | 2026-05-05 |  | Rate limit logico definido en application; faltan adaptador Redis, CORS, Origin/Referer, payload size y bloqueo de secretos. |
 | Fase 10 | Observabilidad | Pendiente |  |  | Health, readiness, logs y metricas basicas. |
@@ -97,12 +97,12 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 7 - Docker y entorno local
 
-- [ ] Crear Dockerfile de ingesta.
-- [ ] Crear Dockerfile de worker.
-- [ ] Completar `docker-compose.yml` con servicios Go.
+- [x] Crear Dockerfile de ingesta.
+- [x] Crear Dockerfile de worker.
+- [x] Completar `docker-compose.yml` con servicios Go.
 - [x] Agregar healthchecks de Redis y PostgreSQL.
-- [ ] Agregar healthchecks de servicios Go.
-- [ ] Validar comandos del Makefile.
+- [x] Agregar healthchecks de servicios Go.
+- [x] Validar comandos del Makefile.
 
 ## Fase 8 - Integracion con backend principal
 

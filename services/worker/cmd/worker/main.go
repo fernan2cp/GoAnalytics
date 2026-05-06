@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -29,6 +31,13 @@ func main() {
 		}
 	}
 
+	postgres_host := os.Getenv("POSTGRES_HOST")
+	if postgres_host == "" {
+		fmt.Fprintf(os.Stderr, "Postgres Host NO Inicializado")
+	} else {
+		fmt.Fprintf(os.Stderr, "postgres_host: %s\n", postgres_host)
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "go-analytics-worker: %v\n", err)
 		os.Exit(1)
@@ -44,8 +53,10 @@ func main() {
 // Debe ejecutarse solo desde main. La logica de negocio queda en application y
 // los detalles de infraestructura en bootstrap/adapters.
 func run() error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithCancel(signalCtx)
+	defer cancel()
 
 	config, err := bootstrap.LoadConfig(os.Getenv("ENV_FILE"))
 	if err != nil {
@@ -60,5 +71,36 @@ func run() error {
 			fmt.Fprintf(os.Stderr, "advertencia: cierre de recursos fallo: %v\n", err)
 		}
 	}()
-	return container.Consumer.Run(ctx)
+
+	healthServer := &http.Server{
+		Addr:              config.HealthAddress(),
+		Handler:           container.Health,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	errCh := make(chan error, 2)
+	go func() {
+		container.Logger.Info(ctx, "servidor operativo del worker iniciado", map[string]any{"addr": config.HealthAddress()})
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+	go func() {
+		errCh <- container.Consumer.Run(ctx)
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		return healthServer.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if shutdownErr := healthServer.Shutdown(shutdownCtx); shutdownErr != nil {
+			return shutdownErr
+		}
+		return err
+	}
 }

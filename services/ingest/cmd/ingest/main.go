@@ -30,7 +30,21 @@ func main() {
 			fmt.Fprintf(os.Stderr, "warning: could not load env file %s: %v\n", envFile, err)
 		}
 	}
-	
+
+	app_env := os.Getenv("APP_ENV")
+	if app_env == "" {
+		fmt.Fprintf(os.Stderr, "Sistema NO Inicializado")
+	} else {
+		fmt.Fprintf(os.Stderr, "Sistema inicializado en %s - redis: %s\n", app_env)
+	}
+
+	redis_addr := os.Getenv("REDIS_ADDR")
+	if redis_addr == "" {
+		fmt.Fprintf(os.Stderr, "Redis NO Inicializado")
+	} else {
+		fmt.Fprintf(os.Stderr, "Redis addr: %s\n", redis_addr)
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "go-analytics-ingest: %v\n", err)
 		os.Exit(1)
