@@ -1,4 +1,4 @@
-.PHONY: test tidy up down
+.PHONY: test tidy up up down migrate-up migrate-down migrate-force
 
 test:
 	cd services/ingest && go test ./...
@@ -14,3 +14,12 @@ up:
 
 down:
 	docker compose down
+
+migrate-up:
+	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" up
+
+migrate-down:
+	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" down 1
+
+migrate-force:
+	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" force $(VERSION)

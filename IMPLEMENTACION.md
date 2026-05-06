@@ -13,8 +13,8 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 2 | API HTTP de ingesta | Completada | 2026-05-05 | 2026-05-05 | Endpoint `POST /v1/events`, JWT HS256, Redis Stream, rate limit Redis y bootstrap conectados. |
 | Fase 3 | Nucleo hexagonal del worker | Completada | 2026-05-05 | 2026-05-05 | Procesamiento testeable sin Redis ni PostgreSQL. |
 | Fase 4 | Worker con Redis Stream y PostgreSQL | Completada | 2026-05-05 | 2026-05-05 | Consumer Redis Stream, cache/resolver, cooldown, negative cache, repositorios pgx y deduplicacion conectados. |
-| Fase 5 | Base PostgreSQL analytics | Parcial | 2026-05-05 |  | Migraciones e indices base creados; repositorios pgx e insercion batch implementados; falta golang-migrate. |
-| Fase 6 | SDK TypeScript | Parcial | 2026-05-05 |  | Paquete, TypeScript, build y README inicial creados; falta cliente funcional. |
+| Fase 5 | Base PostgreSQL analytics | Completada | 2026-05-05 | 2026-05-05 | Migraciones `up/down`, indices base, repositorios pgx, insercion batch y ejecucion con `golang-migrate` configurados. |
+| Fase 6 | SDK TypeScript | Completada | 2026-05-05 | 2026-05-05 | Cliente funcional con `track`, `page`, `identify`, queue, batching, `fetch keepalive`, soporte opcional de `sendBeacon` y tipos exportados. |
 | Fase 7 | Docker y entorno local | Parcial | 2026-05-05 |  | Compose levanta Redis y PostgreSQL con healthchecks; faltan servicios Go y Dockerfiles. |
 | Fase 8 | Integracion con backend principal | Pendiente |  |  | JWT, hidratacion Redis y resolver interno. |
 | Fase 9 | Seguridad y hardening | Parcial | 2026-05-05 |  | Rate limit logico definido en application; faltan adaptador Redis, CORS, Origin/Referer, payload size y bloqueo de secretos. |
@@ -80,19 +80,19 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Crear migracion de `analytics_events`.
 - [x] Crear migracion de `analytics_rejected_events`.
 - [x] Crear indices base.
-- [ ] Configurar ejecucion de migraciones con `golang-migrate`.
+- [x] Configurar ejecucion de migraciones con `golang-migrate`.
 - [x] Implementar insercion batch.
 
 ## Fase 6 - SDK TypeScript
 
 - [x] Configurar TypeScript.
 - [x] Configurar build ESM.
-- [ ] Implementar `createAnalyticsClient`.
-- [ ] Implementar `track`.
-- [ ] Implementar `page`.
-- [ ] Implementar queue y batching.
-- [ ] Implementar `sendBeacon`.
-- [ ] Implementar fallback `fetch` con `keepalive`.
+- [x] Implementar `createAnalyticsClient`.
+- [x] Implementar `track`.
+- [x] Implementar `page`.
+- [x] Implementar queue y batching.
+- [x] Implementar `sendBeacon`.
+- [x] Implementar fallback `fetch` con `keepalive`.
 - [x] Exportar tipos.
 
 ## Fase 7 - Docker y entorno local

@@ -24,12 +24,27 @@ services:
       - "5432:5432"
     volumes:
       - postgres_analytics_data:/var/lib/postgresql/data
-      - ./migrations/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U analytics -d analytics"]
       interval: 10s
       timeout: 3s
       retries: 5
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    profiles: ["tools"]
+    volumes:
+      - ./migrations/postgres:/migrations:ro
+    depends_on:
+      postgres_analytics:
+        condition: service_healthy
+    entrypoint: ["migrate"]
+    command:
+      [
+        "-path=/migrations",
+        "-database=postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable",
+        "up"
+      ]
 
 volumes:
   redis_data:

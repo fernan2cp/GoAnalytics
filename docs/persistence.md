@@ -42,6 +42,27 @@ Las migraciones viven fuera del nucleo y se ejecutan como tarea de infraestructu
 
 Las migraciones deben crear y evolucionar el esquema `analytics_events` y `analytics_rejected_events` sin introducir logica de negocio. Los cambios de esquema deben ser compatibles con los repositorios del worker.
 
+Los archivos usan el formato esperado por `golang-migrate`:
+
+```text
+migrations/postgres/001_create_analytics_events.up.sql
+migrations/postgres/001_create_analytics_events.down.sql
+migrations/postgres/002_create_rejected_events.up.sql
+migrations/postgres/002_create_rejected_events.down.sql
+```
+
+En desarrollo local, las migraciones se ejecutan con:
+
+```bash
+make migrate-up
+```
+
+Para revertir la ultima migracion aplicada:
+
+```bash
+make migrate-down
+```
+
 ## Preparacion para cambios futuros
 
 PostgreSQL es el adaptador inicial, no una dependencia del nucleo. Si mas adelante se reemplaza por ClickHouse u otra base, el cambio esperado es crear nuevos adaptadores que implementen los mismos puertos y ajustar bootstrap, sin reescribir dominio ni casos de uso.
