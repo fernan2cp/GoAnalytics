@@ -5,95 +5,389 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoAnalytics - Sandbox Frontend</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; background-color: #f9f9f9; }
-        .btn { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-bottom: 10px; }
-        .btn:hover { background-color: #0056b3; }
-        .btn-secondary { background-color: #6c757d; }
-        .btn-secondary:hover { background-color: #5a6268; }
-        nav { margin-bottom: 20px; }
-        nav a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
-        .note { font-size: 0.9em; color: #666; font-style: italic; background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin-bottom: 15px;}
-        pre { background: #eee; padding: 10px; border-radius: 4px; overflow-x: auto;}
+        :root {
+            color-scheme: light;
+            --bg: #f7f7f4;
+            --surface: #ffffff;
+            --surface-muted: #f1f2ee;
+            --text: #20231f;
+            --muted: #656b61;
+            --border: #dedfd8;
+            --primary: #12715b;
+            --primary-hover: #0d5d4b;
+            --secondary: #2f3430;
+            --secondary-hover: #1f241f;
+            --warning-bg: #fff8df;
+            --warning-border: #d6a828;
+            --success-bg: #e8f6ef;
+            --success-text: #0b684f;
+            --error-bg: #fff0ed;
+            --error-text: #ad3527;
+            --code-bg: #151713;
+            --code-text: #eef1e8;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .page {
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 0 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        nav a {
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 10px;
+            border-radius: 8px;
+            color: var(--secondary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        nav a:hover {
+            background: var(--surface-muted);
+        }
+
+        header {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.6fr);
+            gap: 24px;
+            align-items: start;
+            padding: 32px 0 24px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            line-height: 1.05;
+            letter-spacing: 0;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 1rem;
+            line-height: 1.35;
+        }
+
+        p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        code {
+            padding: 2px 5px;
+            border-radius: 6px;
+            background: var(--surface-muted);
+            color: var(--secondary);
+            font-size: 0.95em;
+        }
+
+        .status-panel,
+        .card,
+        .note {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+        }
+
+        .status-panel {
+            padding: 16px;
+        }
+
+        .status-panel h2 {
+            margin-bottom: 10px;
+        }
+
+        #status {
+            min-height: 26px;
+            display: inline-flex;
+            align-items: center;
+            margin: 0;
+            padding: 5px 9px;
+            border-radius: 7px;
+            background: var(--success-bg);
+            color: var(--success-text);
+            font-weight: 700;
+        }
+
+        #status.is-error {
+            background: var(--error-bg);
+            color: var(--error-text);
+        }
+
+        .note {
+            margin-bottom: 20px;
+            padding: 14px 16px;
+            border-left: 4px solid var(--warning-border);
+            background: var(--warning-bg);
+            color: #5c4b17;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .card {
+            padding: 18px;
+        }
+
+        .card h2 {
+            margin-bottom: 14px;
+        }
+
+        .actions {
+            display: grid;
+            gap: 10px;
+        }
+
+        .btn {
+            width: fit-content;
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 9px 13px;
+            background: var(--primary);
+            color: #ffffff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 150ms ease, border-color 150ms ease;
+        }
+
+        .btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--secondary-hover);
+        }
+
+        .doc-controls {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            color: var(--secondary);
+            font-weight: 700;
+        }
+
+        select {
+            width: 100%;
+            min-height: 40px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            background: var(--surface);
+            color: var(--text);
+            font: inherit;
+        }
+
+        select:focus,
+        .btn:focus-visible,
+        nav a:focus-visible {
+            outline: 3px solid rgba(18, 113, 91, 0.2);
+            outline-offset: 2px;
+        }
+
+        pre {
+            max-height: 520px;
+            margin: 0;
+            overflow: auto;
+            border-radius: 8px;
+            padding: 14px;
+            background: var(--code-bg);
+            color: var(--code-text);
+            font-size: 0.9rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        @media (max-width: 780px) {
+            .page {
+                width: min(100% - 24px, 1120px);
+                padding-top: 14px;
+            }
+
+            nav,
+            header,
+            .grid,
+            .doc-controls {
+                grid-template-columns: 1fr;
+            }
+
+            nav {
+                display: grid;
+                align-items: start;
+            }
+
+            .nav-links {
+                justify-content: start;
+            }
+
+            header {
+                padding-top: 24px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/">GoAnalytics SDK Demo</a>
-        <a href="/events.html">Ver Eventos Registrados</a>
-    </nav>
+    <main class="page">
+        <nav aria-label="Navegación principal">
+            <div class="brand">GoAnalytics Sandbox</div>
+            <div class="nav-links">
+                <a href="/">SDK Demo</a>
+                <a href="/events.html">Eventos registrados</a>
+            </div>
+        </nav>
 
-    <h1>GoAnalytics SDK Demo</h1>
+        <header>
+            <div>
+                <h1>GoAnalytics SDK Demo</h1>
+                <p>Prueba local del SDK web, envío de eventos y consulta rápida de documentación del proyecto.</p>
+            </div>
+            <section class="status-panel" aria-labelledby="status-title">
+                <h2 id="status-title">Estado del SDK</h2>
+                <p id="status">Inicializando...</p>
+            </section>
+        </header>
 
-    <!-- 
-      NOTA IMPORTANTE DE INTEGRACIÓN:
-      En este entorno de Sandbox, estamos sirviendo el SDK de forma estática (/sdk/index.js) 
-      solo para propósitos de demostración.
-      
-      En un proyecto real, la integración correcta debe realizarse mediante npm:
-      1. npm install @go-analytics/web-sdk
-      2. import { createAnalyticsClient } from "@go-analytics/web-sdk"
-      
-      Ver la documentación oficial (docs/integration/...) para más detalles.
-    -->
-    <div class="note">
-        <strong>Nota:</strong> El SDK ha sido inicializado estáticamente para este entorno de prueba. En un entorno real, por favor utiliza <code>npm install @go-analytics/web-sdk</code>. Revisa el código fuente (HTML) de esta página para ver el comentario de integración.
-    </div>
+        <!--
+          NOTA IMPORTANTE DE INTEGRACIÓN:
+          En este entorno de Sandbox, estamos sirviendo el SDK de forma estática (/sdk/index.js)
+          solo para propósitos de demostración.
 
-    <div class="card">
-        <h3>Acciones de Prueba</h3>
-        <button id="btn-page" class="btn">Enviar Evento "page_view"</button>
-        <button id="btn-click" class="btn">Enviar Evento "button_click"</button>
-        <button id="btn-checkout" class="btn">Enviar Evento "checkout_started"</button>
-        <button id="btn-identify" class="btn btn-secondary">Identificar Usuario (login mock)</button>
-        <br><br>
-        <p id="status" style="color: green; font-weight: bold;"></p>
-    </div>
+          En un proyecto real, la integración correcta debe realizarse mediante npm:
+          1. npm install @go-analytics/web-sdk
+          2. import { createAnalyticsClient } from "@go-analytics/web-sdk"
 
-    <div class="card">
-        <h3>Documentación</h3>
-        <select id="doc-selector" style="padding: 5px; margin-bottom: 10px;">
-            <option value="/docs/PROJECT_README.md">README Proyecto (Raíz)</option>
-            <option value="/docs/SDK_README.md">README Web SDK</option>
-            <option value="/docs/sandbox/README.md">README Sandbox</option>
-            <option value="/docs/integration/instrucciones-integracion-go-analytics-minimo.md">Guía de Integración</option>
-            <option value="/docs/architecture.md">Arquitectura General</option>
-            <option value="/docs/event-contract.md">Contrato de Eventos</option>
-        </select>
-        <button id="btn-load-doc" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">Cargar Documento</button>
-        
-        <pre id="doc-content">Cargando...</pre>
-    </div>
+          Ver la documentación oficial (docs/integration/...) para más detalles.
+        -->
+        <div class="note">
+            <strong>Nota:</strong> El SDK ha sido inicializado estáticamente para este entorno de prueba. En un entorno real, utiliza <code>npm install @go-analytics/web-sdk</code>. Revisa el código fuente HTML de esta página para ver el comentario de integración.
+        </div>
+
+        <div class="grid">
+            <section class="card" aria-labelledby="actions-title">
+                <h2 id="actions-title">Acciones de prueba</h2>
+                <div class="actions">
+                    <button id="btn-page" class="btn">Enviar evento "page_view"</button>
+                    <button id="btn-click" class="btn">Enviar evento "button_click"</button>
+                    <button id="btn-checkout" class="btn">Enviar evento "checkout_started"</button>
+                    <button id="btn-identify" class="btn btn-secondary">Identificar usuario</button>
+                </div>
+            </section>
+
+            <section class="card" aria-labelledby="docs-title">
+                <h2 id="docs-title">Documentación</h2>
+                <div class="doc-controls">
+                    <label for="doc-selector">
+                        Documento
+                        <select id="doc-selector">
+                            <option value="/docs/PROJECT_README.md">README Proyecto (Raíz)</option>
+                            <option value="/docs/SDK_README.md">README Web SDK</option>
+                            <option value="/docs/sandbox/README.md">README Sandbox</option>
+                            <option value="/docs/integration/instrucciones-integracion-go-analytics-minimo.md">Guía de Integración</option>
+                            <option value="/docs/architecture.md">Arquitectura General</option>
+                            <option value="/docs/event-contract.md">Contrato de Eventos</option>
+                        </select>
+                    </label>
+                    <button id="btn-load-doc" class="btn btn-secondary">Cargar documento</button>
+                </div>
+
+                <pre id="doc-content">Cargando...</pre>
+            </section>
+        </div>
+    </main>
 
     <script type="module">
         import { createAnalyticsClient } from '/sdk/index.js';
 
         let analytics = null;
+        const status = document.getElementById('status');
+
+        function setStatus(message, isError = false) {
+            status.innerText = message;
+            status.classList.toggle('is-error', isError);
+        }
 
         async function initSDK() {
             try {
                 const res = await fetch('/api/token');
                 if (!res.ok) throw new Error("No se pudo obtener el token");
                 const data = await res.json();
-                
-                // Inicializar el cliente usando el token y apuntando al endpoint local del microservicio de ingesta
-                // (Como estamos usando docker-compose, el frontend en el navegador apunta a localhost:8081)
+
+                // Inicializar el cliente usando el token y apuntando al endpoint local del microservicio de ingesta.
+                // Como estamos usando docker-compose, el frontend en el navegador apunta a localhost:8081.
                 analytics = createAnalyticsClient({
                     token: data.token,
                     endpoint: "http://localhost:8081/v1/events",
-                    flushIntervalMs: 2000, // Flush rápido para ver resultados pronto en el sandbox
+                    flushIntervalMs: 2000, // Flush rápido para ver resultados pronto en el sandbox.
                     batchSize: 5
                 });
 
-                document.getElementById('status').innerText = "SDK Inicializado Correctamente.";
-                
-                // Enviar pageview inicial
+                setStatus("SDK inicializado correctamente.");
+
+                // Enviar pageview inicial.
                 analytics.page({ title: document.title, path: window.location.pathname });
 
             } catch (err) {
                 console.error("Error inicializando SDK:", err);
-                document.getElementById('status').innerText = "Error inicializando SDK (ver consola).";
-                document.getElementById('status').style.color = "red";
+                setStatus("Error inicializando SDK (ver consola).", true);
             }
         }
 
@@ -121,7 +415,7 @@
         document.getElementById('btn-identify').addEventListener('click', () => {
             if (analytics) {
                 analytics.identify("user_sandbox_999");
-                document.getElementById('status').innerText = "Usuario identificado como user_sandbox_999";
+                setStatus("Usuario identificado como user_sandbox_999");
                 console.log("Usuario identificado");
             }
         });
@@ -140,7 +434,6 @@
 
         document.getElementById('btn-load-doc').addEventListener('click', loadDoc);
 
-        // Init
         initSDK();
         loadDoc();
     </script>

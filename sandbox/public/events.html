@@ -5,75 +5,306 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GoAnalytics - Eventos Registrados</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 1000px; margin: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .btn { padding: 8px 12px; border: none; background-color: #28a745; color: white; border-radius: 4px; cursor: pointer; }
-        .btn:hover { background-color: #218838; }
-        nav { margin-bottom: 20px; }
-        nav a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
-        pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em; }
+        :root {
+            color-scheme: light;
+            --bg: #f7f7f4;
+            --surface: #ffffff;
+            --surface-muted: #f1f2ee;
+            --ink: #20231f;
+            --muted: #656b61;
+            --border: #dedfd8;
+            --primary: #12715b;
+            --primary-hover: #0d5d4b;
+            --dark: #171a16;
+            --dark-soft: #222720;
+            --dark-border: #343a31;
+            --dark-text: #eef1e8;
+            --error-bg: #fff0ed;
+            --error-text: #ad3527;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: ui-sans-serif, system-ui, sans-serif;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .page {
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 24px 0 40px;
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 0 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            font-weight: 700;
+        }
+
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        nav a {
+            min-height: 36px;
+            display: inline-flex;
+            align-items: center;
+            padding: 7px 10px;
+            border-radius: 8px;
+            color: var(--ink);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        nav a:hover {
+            background: var(--surface-muted);
+        }
+
+        header {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 32px 0 22px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1.08;
+            letter-spacing: 0;
+        }
+
+        p {
+            max-width: 720px;
+            margin: 0;
+            color: var(--muted);
+        }
+
+        code {
+            padding: 2px 5px;
+            border-radius: 6px;
+            background: var(--surface-muted);
+            color: var(--ink);
+            font-size: 0.95em;
+        }
+
+        .btn {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 9px 13px;
+            background: var(--primary);
+            color: #ffffff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background-color 150ms ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn:focus-visible,
+        nav a:focus-visible {
+            outline: 3px solid rgba(18, 113, 91, 0.2);
+            outline-offset: 2px;
+        }
+
+        .table-panel {
+            overflow: hidden;
+            border: 1px solid var(--dark-border);
+            border-radius: 8px;
+            background: var(--dark);
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            min-width: 880px;
+            border-collapse: collapse;
+            color: var(--dark-text);
+            font-size: 0.92rem;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid var(--dark-border);
+            padding: 12px 14px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--dark-soft);
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .event-name {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .muted-cell {
+            color: #b8beb2;
+        }
+
+        .table-state {
+            padding: 22px;
+            text-align: center;
+            color: #cfd5c9;
+        }
+
+        .table-state.is-error {
+            background: var(--error-bg);
+            color: var(--error-text);
+            font-weight: 700;
+        }
+
+        pre {
+            max-width: 460px;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #dce5d6;
+            font-size: 0.84rem;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 780px) {
+            .page {
+                width: min(100% - 24px, 1180px);
+                padding-top: 14px;
+            }
+
+            nav {
+                display: grid;
+                align-items: start;
+            }
+
+            .nav-links {
+                justify-content: start;
+            }
+
+            header {
+                display: grid;
+                align-items: start;
+                padding-top: 24px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <nav>
-        <a href="/">GoAnalytics SDK Demo</a>
-        <a href="/events.html">Ver Eventos Registrados</a>
-    </nav>
+    <main class="page">
+        <nav aria-label="Navegación principal">
+            <div class="brand">GoAnalytics Sandbox</div>
+            <div class="nav-links">
+                <a href="/">SDK Demo</a>
+                <a href="/events.html">Eventos registrados</a>
+            </div>
+        </nav>
 
-    <h1>Eventos en Base de Datos (Últimos 50)</h1>
-    <p>Esta tabla lee directamente desde la base de datos PostgreSQL <code>analytics_events</code> a través del backend de prueba en Go.</p>
-    
-    <button id="btn-refresh" class="btn">Refrescar Datos</button>
-    
-    <table id="events-table">
-        <thead>
-            <tr>
-                <th>Tiempo</th>
-                <th>Nombre del Evento</th>
-                <th>User ID</th>
-                <th>URL</th>
-                <th>Propiedades (JSON)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr><td colspan="5">Cargando...</td></tr>
-        </tbody>
-    </table>
+        <header>
+            <div>
+                <h1>Eventos en base de datos</h1>
+                <p>Últimos 50 registros leídos desde PostgreSQL <code>analytics_events</code> a través del backend de prueba en Go.</p>
+            </div>
+            <button id="btn-refresh" class="btn">Refrescar datos</button>
+        </header>
+
+        <section class="table-panel" aria-label="Eventos registrados">
+            <div class="table-scroll">
+                <table id="events-table">
+                    <thead>
+                        <tr>
+                            <th>Tiempo</th>
+                            <th>Nombre del evento</th>
+                            <th>User ID</th>
+                            <th>URL</th>
+                            <th>Propiedades (JSON)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td colspan="5" class="table-state">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
 
     <script>
         async function fetchEvents() {
             const tbody = document.querySelector('#events-table tbody');
-            tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
-            
+            tbody.innerHTML = '<tr><td colspan="5" class="table-state">Cargando...</td></tr>';
+
             try {
                 const res = await fetch('/api/events');
                 if (!res.ok) throw new Error("Error en la petición: " + res.status);
                 const events = await res.json();
-                
+
                 tbody.innerHTML = '';
-                
+
                 if (!events || events.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay eventos registrados.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="table-state">No hay eventos registrados.</td></tr>';
                     return;
                 }
 
                 events.forEach(ev => {
                     const tr = document.createElement('tr');
-                    
+
                     const timeCell = document.createElement('td');
                     timeCell.innerText = new Date(ev.event_time).toLocaleString();
-                    
+
                     const nameCell = document.createElement('td');
+                    nameCell.className = 'event-name';
                     nameCell.innerText = ev.event_name || '-';
-                    
+
                     const userCell = document.createElement('td');
+                    userCell.className = ev.user_id ? '' : 'muted-cell';
                     userCell.innerText = ev.user_id || 'Anónimo';
-                    
+
                     const urlCell = document.createElement('td');
+                    urlCell.className = ev.url ? '' : 'muted-cell';
                     urlCell.innerText = ev.url || '-';
-                    
+
                     const propsCell = document.createElement('td');
                     const pre = document.createElement('pre');
                     pre.innerText = JSON.stringify(ev.properties || {}, null, 2);
@@ -84,18 +315,17 @@
                     tr.appendChild(userCell);
                     tr.appendChild(urlCell);
                     tr.appendChild(propsCell);
-                    
+
                     tbody.appendChild(tr);
                 });
             } catch (error) {
                 console.error("Error fetching events:", error);
-                tbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error cargando eventos: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="table-state is-error">Error cargando eventos: ${error.message}</td></tr>`;
             }
         }
 
         document.getElementById('btn-refresh').addEventListener('click', fetchEvents);
 
-        // Fetch on load
         fetchEvents();
     </script>
 </body>
