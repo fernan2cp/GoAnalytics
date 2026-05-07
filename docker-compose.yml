@@ -1,3 +1,4 @@
+name: go-analytics-sandbox
 services:
   analytics-ingest:
     build:
@@ -5,14 +6,9 @@ services:
       dockerfile: services/ingest/Dockerfile
     container_name: go-analytics-ingest
     env_file:
-      - .env.devel
-    environment:
-      ENV_FILE: ""
-      REDIS_ADDR: redis:6379
-      INGEST_HTTP_HOST: 0.0.0.0
-      INGEST_HTTP_PORT: 8080
+      - .env.example
     ports:
-      - "8080:8080"
+      - "8081:8080"
     depends_on:
       redis:
         condition: service_healthy
@@ -24,8 +20,8 @@ services:
     networks:
       go_network:
         aliases:
+          - ingest
           - go-ingest
-        ipv4_address: 172.30.1.1
     logging:
       driver: local
       options:
@@ -38,34 +34,24 @@ services:
       dockerfile: services/worker/Dockerfile
     container_name: go-analytics-worker
     env_file:
-      - .env.devel
-    environment:
-      ENV_FILE: ""
-      REDIS_ADDR: redis:6379
-      POSTGRES_HOST: postgres_analytics
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: analytics
-      POSTGRES_PASSWORD: analytics
-      POSTGRES_DB: analytics
-      WORKER_HEALTH_HTTP_HOST: 0.0.0.0
-      WORKER_HEALTH_HTTP_PORT: 8081
-    ports:
-      - "8081:8081"
+      - .env.example
+    # ports:
+    #   - "8081:8081"
     depends_on:
       redis:
         condition: service_healthy
       postgres_analytics:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8081/ready >/dev/null"]
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8080/ready >/dev/null"]
       interval: 10s
       timeout: 3s
       retries: 5
     networks:
       go_network:
         aliases:
+          - worker
           - go-worker
-        ipv4_address: 172.30.1.2
     logging:
       driver: local
       options:
@@ -76,8 +62,8 @@ services:
     image: redis:7-alpine
     container_name: go-analytics-redis
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -85,23 +71,32 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      go_network:
+        aliases:
+          - redis
 
   postgres_analytics:
     image: postgres:16-alpine
     container_name: go-analytics-postgres
     environment:
-      POSTGRES_USER: analytics
-      POSTGRES_PASSWORD: analytics
-      POSTGRES_DB: analytics
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analytics}
+      POSTGRES_DB: ${POSTGRES_DB:-analytics}
     ports:
       - "5433:5432"
     volumes:
       - postgres_analytics_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U analytics -d analytics"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-analytics} -d $${POSTGRES_DB:-analytics}"]
       interval: 10s
       timeout: 3s
       retries: 5
+    networks:
+      go_network:
+        aliases:
+          - postgres
+          - postgres_analytics
 
   migrate:
     image: migrate/migrate:v4.17.1
@@ -115,9 +110,40 @@ services:
     command:
       [
         "-path=/migrations",
-        "-database=postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable",
+        "-database=postgres://${POSTGRES_USER:-analytics}:${POSTGRES_PASSWORD:-analytics}@postgres_analytics:5432/${POSTGRES_DB:-analytics}?sslmode=${POSTGRES_SSLMODE:-disable}",
         "up"
       ]
+    networks:
+      - go_network
+
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    container_name: go-analytics-sandbox
+    env_file:
+      - .env.example
+    environment:
+      ENV_FILE: ""
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./docs:/docs:ro
+      - ./packages/web-sdk/dist:/sdk:ro
+      - ./sandbox/public:/app/public:ro
+    depends_on:
+      postgres_analytics:
+        condition: service_healthy
+    networks:
+      go_network:
+        aliases:
+          - sandbox
+          - go-sandbox
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "5"
 
 volumes:
   redis_data:
@@ -126,7 +152,3 @@ volumes:
 networks:
   go_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-    name: go_network

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoAnalytics - Sandbox Frontend</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; background-color: #f9f9f9; }
+        .btn { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-bottom: 10px; }
+        .btn:hover { background-color: #0056b3; }
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover { background-color: #5a6268; }
+        nav { margin-bottom: 20px; }
+        nav a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
+        .note { font-size: 0.9em; color: #666; font-style: italic; background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin-bottom: 15px;}
+        pre { background: #eee; padding: 10px; border-radius: 4px; overflow-x: auto;}
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">GoAnalytics SDK Demo</a>
+        <a href="/events.html">Ver Eventos Registrados</a>
+    </nav>
+
+    <h1>GoAnalytics SDK Demo</h1>
+
+    <!-- 
+      NOTA IMPORTANTE DE INTEGRACIÓN:
+      En este entorno de Sandbox, estamos sirviendo el SDK de forma estática (/sdk/index.js) 
+      solo para propósitos de demostración.
+      
+      En un proyecto real, la integración correcta debe realizarse mediante npm:
+      1. npm install @go-analytics/web-sdk
+      2. import { createAnalyticsClient } from "@go-analytics/web-sdk"
+      
+      Ver la documentación oficial (docs/integration/...) para más detalles.
+    -->
+    <div class="note">
+        <strong>Nota:</strong> El SDK ha sido inicializado estáticamente para este entorno de prueba. En un entorno real, por favor utiliza <code>npm install @go-analytics/web-sdk</code>. Revisa el código fuente (HTML) de esta página para ver el comentario de integración.
+    </div>
+
+    <div class="card">
+        <h3>Acciones de Prueba</h3>
+        <button id="btn-page" class="btn">Enviar Evento "page_view"</button>
+        <button id="btn-click" class="btn">Enviar Evento "button_click"</button>
+        <button id="btn-checkout" class="btn">Enviar Evento "checkout_started"</button>
+        <button id="btn-identify" class="btn btn-secondary">Identificar Usuario (login mock)</button>
+        <br><br>
+        <p id="status" style="color: green; font-weight: bold;"></p>
+    </div>
+
+    <div class="card">
+        <h3>Documentación</h3>
+        <select id="doc-selector" style="padding: 5px; margin-bottom: 10px;">
+            <option value="/docs/README.md">README principal</option>
+            <option value="/docs/packages/web-sdk/README.md">README del Web SDK</option>
+            <option value="/docs/docs/integration/instrucciones-integracion-go-analytics-minimo.md">Instrucciones de Integración</option>
+        </select>
+        <button id="btn-load-doc" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.9em;">Cargar Documento</button>
+        
+        <pre id="doc-content">Cargando...</pre>
+    </div>
+
+    <script type="module">
+        import { createAnalyticsClient } from '/sdk/index.js';
+
+        let analytics = null;
+
+        async function initSDK() {
+            try {
+                const res = await fetch('/api/token');
+                if (!res.ok) throw new Error("No se pudo obtener el token");
+                const data = await res.json();
+                
+                // Inicializar el cliente usando el token y apuntando al endpoint local del microservicio de ingesta
+                // (Como estamos usando docker-compose, el frontend en el navegador apunta a localhost:8081)
+                analytics = createAnalyticsClient({
+                    token: data.token,
+                    endpoint: "http://localhost:8081/v1/events",
+                    flushIntervalMs: 2000, // Flush rápido para ver resultados pronto en el sandbox
+                    batchSize: 5
+                });
+
+                document.getElementById('status').innerText = "SDK Inicializado Correctamente.";
+                
+                // Enviar pageview inicial
+                analytics.page({ title: document.title, path: window.location.pathname });
+
+            } catch (err) {
+                console.error("Error inicializando SDK:", err);
+                document.getElementById('status').innerText = "Error inicializando SDK (ver consola).";
+                document.getElementById('status').style.color = "red";
+            }
+        }
+
+        document.getElementById('btn-page').addEventListener('click', () => {
+            if (analytics) {
+                analytics.page({ title: "Custom Page View", path: "/virtual-page" });
+                console.log("Evento page_view encolado");
+            }
+        });
+
+        document.getElementById('btn-click').addEventListener('click', () => {
+            if (analytics) {
+                analytics.track("button_click", { button_id: "demo_button", action: "test" });
+                console.log("Evento button_click encolado");
+            }
+        });
+
+        document.getElementById('btn-checkout').addEventListener('click', () => {
+            if (analytics) {
+                analytics.track("checkout_started", { cart_id: "cart_123", total: 99.99 });
+                console.log("Evento checkout_started encolado");
+            }
+        });
+
+        document.getElementById('btn-identify').addEventListener('click', () => {
+            if (analytics) {
+                analytics.identify("user_sandbox_999");
+                document.getElementById('status').innerText = "Usuario identificado como user_sandbox_999";
+                console.log("Usuario identificado");
+            }
+        });
+
+        async function loadDoc() {
+            const url = document.getElementById('doc-selector').value;
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Error HTTP " + res.status);
+                const text = await res.text();
+                document.getElementById('doc-content').innerText = text;
+            } catch(e) {
+                document.getElementById('doc-content').innerText = "No se pudo cargar el documento: " + url + "\n" + e;
+            }
+        }
+
+        document.getElementById('btn-load-doc').addEventListener('click', loadDoc);
+
+        // Init
+        initSDK();
+        loadDoc();
+    </script>
+</body>
+</html>

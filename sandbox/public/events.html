@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoAnalytics - Eventos Registrados</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 1000px; margin: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .btn { padding: 8px 12px; border: none; background-color: #28a745; color: white; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background-color: #218838; }
+        nav { margin-bottom: 20px; }
+        nav a { margin-right: 15px; text-decoration: none; color: #007bff; font-weight: bold; }
+        pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">GoAnalytics SDK Demo</a>
+        <a href="/events.html">Ver Eventos Registrados</a>
+    </nav>
+
+    <h1>Eventos en Base de Datos (Últimos 50)</h1>
+    <p>Esta tabla lee directamente desde la base de datos PostgreSQL <code>analytics_events</code> a través del backend de prueba en Go.</p>
+    
+    <button id="btn-refresh" class="btn">Refrescar Datos</button>
+    
+    <table id="events-table">
+        <thead>
+            <tr>
+                <th>Tiempo</th>
+                <th>Nombre del Evento</th>
+                <th>User ID</th>
+                <th>URL</th>
+                <th>Propiedades (JSON)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td colspan="5">Cargando...</td></tr>
+        </tbody>
+    </table>
+
+    <script>
+        async function fetchEvents() {
+            const tbody = document.querySelector('#events-table tbody');
+            tbody.innerHTML = '<tr><td colspan="5">Cargando...</td></tr>';
+            
+            try {
+                const res = await fetch('/api/events');
+                if (!res.ok) throw new Error("Error en la petición: " + res.status);
+                const events = await res.json();
+                
+                tbody.innerHTML = '';
+                
+                if (!events || events.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay eventos registrados.</td></tr>';
+                    return;
+                }
+
+                events.forEach(ev => {
+                    const tr = document.createElement('tr');
+                    
+                    const timeCell = document.createElement('td');
+                    timeCell.innerText = new Date(ev.event_time).toLocaleString();
+                    
+                    const nameCell = document.createElement('td');
+                    nameCell.innerText = ev.event_name || '-';
+                    
+                    const userCell = document.createElement('td');
+                    userCell.innerText = ev.user_id || 'Anónimo';
+                    
+                    const urlCell = document.createElement('td');
+                    urlCell.innerText = ev.url || '-';
+                    
+                    const propsCell = document.createElement('td');
+                    const pre = document.createElement('pre');
+                    pre.innerText = JSON.stringify(ev.properties || {}, null, 2);
+                    propsCell.appendChild(pre);
+
+                    tr.appendChild(timeCell);
+                    tr.appendChild(nameCell);
+                    tr.appendChild(userCell);
+                    tr.appendChild(urlCell);
+                    tr.appendChild(propsCell);
+                    
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error("Error fetching events:", error);
+                tbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error cargando eventos: ${error.message}</td></tr>`;
+            }
+        }
+
+        document.getElementById('btn-refresh').addEventListener('click', fetchEvents);
+
+        // Fetch on load
+        fetchEvents();
+    </script>
+</body>
+</html>
