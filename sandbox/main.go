@@ -64,7 +64,7 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/internal/analytics/sites/resolve", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/v1/internal/analytics/sites/resolve", func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		expectedAuth := "Bearer " + resolverToken
 		if authHeader != expectedAuth {
@@ -79,13 +79,22 @@ func main() {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
+		
+		// El worker es estricto y no soporta '*' como comodín, 
+		// así que devolvemos el origin solicitado para que pase la validación.
+		allowedDomains := []string{"*"}
+		if origin, ok := req["origin"].(string); ok && origin != "" {
+			allowedDomains = append(allowedDomains, origin)
+		}
+
+		log.Printf("Resolviendo site: %s para origin: %s -> permitiendo: %v", req["site_code"], req["origin"], allowedDomains)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"site_code":        req["site_code"],
 			"tenant_id":        "tenant_sandbox",
 			"site_id":          "site_sandbox",
 			"status":           "active",
 			"tracking_enabled": true,
-			"allowed_domains":  []string{"*"},
+			"allowed_domains":  allowedDomains,
 			"token_version":    1,
 			"sample_rate":      1,
 			"schema_version":   1,
