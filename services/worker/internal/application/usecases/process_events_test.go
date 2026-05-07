@@ -260,16 +260,18 @@ type fakeSiteCache struct {
 	found  bool
 	err    error
 	sets   []site.SiteConfig
+	keys   []outbound.SiteCacheKey
 }
 
-func (fake *fakeSiteCache) GetByPublicID(ctx context.Context, sitePublicID string) (site.SiteConfig, bool, error) {
+func (fake *fakeSiteCache) Get(ctx context.Context, key outbound.SiteCacheKey) (site.SiteConfig, bool, error) {
 	_ = ctx
-	_ = sitePublicID
+	fake.keys = append(fake.keys, key)
 	return fake.config, fake.found, fake.err
 }
 
-func (fake *fakeSiteCache) Set(ctx context.Context, config site.SiteConfig, ttl time.Duration) error {
+func (fake *fakeSiteCache) Set(ctx context.Context, key outbound.SiteCacheKey, config site.SiteConfig, ttl time.Duration) error {
 	_ = ctx
+	fake.keys = append(fake.keys, key)
 	_ = ttl
 	fake.sets = append(fake.sets, config)
 	return fake.err

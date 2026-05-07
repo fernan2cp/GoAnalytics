@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -37,9 +38,9 @@ func NewIngestHandler(ingester inbound.IngestEvents, logger outbound.Logger, max
 
 // ServeHTTP procesa POST /v1/events.
 //
-// Recibe solicitudes HTTP con JSON de eventos y responde 204 cuando el caso de
-// uso acepta el batch para procesamiento. Devuelve errores HTTP solo para
-// fallas de contrato o infraestructura.
+// Recibe solicitudes HTTP con JSON de eventos y responde 202 con conteos cuando
+// el caso de uso acepta el batch para procesamiento. Devuelve errores HTTP solo
+// para fallas de contrato global o infraestructura.
 func (handler *IngestHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
@@ -62,8 +63,13 @@ func (handler *IngestHandler) ServeHTTP(writer http.ResponseWriter, request *htt
 		handler.writeUseCaseError(writer, request.Context(), err)
 		return
 	}
-	handler.info(request.Context(), "eventos aceptados para procesamiento", map[string]any{"accepted": response.Accepted})
-	writer.WriteHeader(http.StatusNoContent)
+	handler.info(request.Context(), "eventos evaluados para procesamiento", map[string]any{
+		"accepted": response.Accepted,
+		"rejected": response.Rejected,
+	})
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(writer).Encode(response)
 }
 
 // writeUseCaseError traduce errores de aplicacion a respuestas HTTP.

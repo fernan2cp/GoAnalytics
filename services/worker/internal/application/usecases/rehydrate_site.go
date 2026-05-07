@@ -67,24 +67,29 @@ func NewRehydrateSiteUseCase(
 
 // Rehydrate resuelve y cachea metadata de site.
 //
-// Recibe contexto, site_code, origin y entorno. Devuelve site.SiteConfig cuando
-// el resolver responde metadata valida y esta puede guardarse en cache.
+// Recibe contexto y clave de cache con site_code, origin, entorno y
+// token_version. Devuelve site.SiteConfig cuando el resolver responde metadata
+// valida y esta puede guardarse en cache.
 //
 // Devuelve ErrRehydrateInputInvalid para entradas incompletas,
 // ErrSiteResolveFailed para fallas del resolver y errores de dominio o cache
 // cuando la metadata no es usable o no puede persistirse temporalmente.
-func (uc *RehydrateSiteUseCase) Rehydrate(ctx context.Context, siteCode string, origin string, environment string) (site.SiteConfig, error) {
+func (uc *RehydrateSiteUseCase) Rehydrate(ctx context.Context, key outbound.SiteCacheKey) (site.SiteConfig, error) {
 	if uc == nil || uc.siteResolver == nil || uc.siteCache == nil {
 		return site.SiteConfig{}, ErrRehydrateDependencyMissing
 	}
-	if strings.TrimSpace(siteCode) == "" || strings.TrimSpace(origin) == "" || strings.TrimSpace(environment) == "" {
+	if strings.TrimSpace(key.SiteCode) == "" ||
+		strings.TrimSpace(key.Origin) == "" ||
+		strings.TrimSpace(key.Environment) == "" ||
+		key.TokenVersion <= 0 {
 		return site.SiteConfig{}, ErrRehydrateInputInvalid
 	}
 
 	config, err := uc.siteResolver.Resolve(ctx, outbound.ResolveSiteInput{
-		SiteCode:    siteCode,
-		Origin:      origin,
-		Environment: environment,
+		SiteCode:     key.SiteCode,
+		Origin:       key.Origin,
+		Environment:  key.Environment,
+		TokenVersion: key.TokenVersion,
 	})
 	if err != nil {
 		return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteResolveFailed, err)
@@ -92,7 +97,7 @@ func (uc *RehydrateSiteUseCase) Rehydrate(ctx context.Context, siteCode string, 
 	if err := site.ValidateConfig(config); err != nil {
 		return site.SiteConfig{}, err
 	}
-	if err := uc.siteCache.Set(ctx, config, uc.options.SiteCacheTTL); err != nil {
+	if err := uc.siteCache.Set(ctx, key, config, uc.options.SiteCacheTTL); err != nil {
 		return site.SiteConfig{}, err
 	}
 	return config, nil

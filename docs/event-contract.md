@@ -12,6 +12,11 @@ Content-Type: application/json
 
 ## Payload
 
+El microservicio es flexible en la recepción de datos. Permite enviar un array de eventos o un único evento suelto. También soporta los siguientes alias para facilitar la integración desde diversos SDKs:
+- `metadata` -> mapea a `properties`
+- `event_type` -> mapea a `event_name`
+- `page_url` -> mapea a `url`
+
 ```json
 {
   "events": [
@@ -36,7 +41,15 @@ Content-Type: application/json
 
 ## Respuesta
 
-La respuesta esperada para eventos aceptados para procesamiento es `204 No Content`.
+La respuesta esperada para una solicitud aceptada para procesamiento es `202 Accepted`. El cuerpo de la respuesta informa sobre el resultado de la ingesta inicial:
+
+```json
+{
+  "accepted": 1,
+  "rejected": 0,
+  "event_ids": ["018f9b8e-0000-7000-a000-000000000001"]
+}
+```
 
 ## Stream interno
 

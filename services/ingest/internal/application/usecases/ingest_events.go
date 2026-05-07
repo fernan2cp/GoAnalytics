@@ -130,6 +130,8 @@ func (uc *IngestEventsUseCase) Ingest(ctx context.Context, request dto.IngestReq
 	}
 
 	rawEvents := make([]event.RawEvent, 0, len(request.Events))
+	eventIDs := make([]string, 0, len(request.Events))
+	rejected := 0
 	for _, item := range request.Events {
 		raw := event.RawEvent{
 			EventID:      item.EventID,
@@ -156,15 +158,36 @@ func (uc *IngestEventsUseCase) Ingest(ctx context.Context, request dto.IngestReq
 			Context:      event.NormalizeMap(item.Context),
 		}
 		if err := event.ValidateRawEvent(raw); err != nil {
-			return dto.IngestResponse{}, fmt.Errorf("%w: %v", ErrInvalidPayload, err)
+			rejected++
+			uc.warn(ctx, "evento de ingesta rechazado por payload invalido", map[string]any{
+				"event_id":   item.EventID,
+				"event_name": item.EventName,
+				"reason":     err.Error(),
+			})
+			rawEvents = append(rawEvents, raw)
+			continue
 		}
 		rawEvents = append(rawEvents, raw)
+		eventIDs = append(eventIDs, raw.EventID)
 	}
 
-	if err := uc.publisher.Publish(ctx, rawEvents); err != nil {
-		return dto.IngestResponse{}, fmt.Errorf("%w: %v", ErrPublishFailed, err)
+	if len(rawEvents) > 0 {
+		if err := uc.publisher.Publish(ctx, rawEvents); err != nil {
+			return dto.IngestResponse{}, fmt.Errorf("%w: %v", ErrPublishFailed, err)
+		}
 	}
-	return dto.IngestResponse{Accepted: len(rawEvents)}, nil
+	return dto.IngestResponse{Accepted: len(eventIDs), Rejected: rejected, EventIDs: eventIDs}, nil
+}
+
+// warn registra una advertencia si el logger esta configurado.
+//
+// Recibe contexto, mensaje y atributos. No devuelve error porque el log no debe
+// cambiar el resultado de la ingesta.
+func (uc *IngestEventsUseCase) warn(ctx context.Context, message string, attrs map[string]any) {
+	if uc.logger == nil {
+		return
+	}
+	uc.logger.Warn(ctx, message, attrs)
 }
 
 // normalizeOptions aplica defaults de aplicacion a la politica de ingesta.

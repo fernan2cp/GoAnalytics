@@ -43,6 +43,8 @@ type Config struct {
 
 	MaxEventsPerBatch    int
 	MaxEventPayloadBytes int64
+
+	AllowedOrigins []string
 }
 
 // LoadConfig carga configuracion desde un archivo `.env` opcional y entorno.
@@ -80,6 +82,16 @@ func LoadConfig(dotenvPath string) (Config, error) {
 
 		MaxEventsPerBatch:    50,
 		MaxEventPayloadBytes: 65536,
+	}
+
+	allowedOriginsStr := getEnv("CORS_ALLOWED_ORIGINS", "")
+	if allowedOriginsStr != "" {
+		config.AllowedOrigins = strings.Split(allowedOriginsStr, ",")
+		for i, origin := range config.AllowedOrigins {
+			config.AllowedOrigins[i] = strings.TrimSpace(origin)
+		}
+	} else if config.AppEnv == "development" {
+		config.AllowedOrigins = []string{"*"}
 	}
 
 	var err error

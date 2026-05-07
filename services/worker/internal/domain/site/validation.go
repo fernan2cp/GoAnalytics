@@ -94,12 +94,13 @@ func ValidateForEvent(config SiteConfig, eventSiteCode string, environment strin
 
 // AllowsOrigin indica si el origin pertenece a los dominios permitidos.
 //
-// Recibe SiteConfig y un origin HTTP/HTTPS. Devuelve true cuando el host del
-// origin coincide con algun allowed_domain normalizado. Devuelve false ante
-// origin vacio, URL invalida o dominios sin coincidencia.
+// Recibe SiteConfig y un origin HTTP/HTTPS. Devuelve true cuando el host y
+// puerto del origin coinciden con algun allowed_domain normalizado. Devuelve
+// false ante origin vacio, URL invalida o dominios sin coincidencia.
 //
-// La comparacion ignora mayusculas y un punto final del host. No acepta
-// subdominios implicitos: cada dominio debe estar listado explicitamente.
+// La comparacion ignora esquema, mayusculas, un punto final del host y prefijo
+// www. Conserva el puerto si existe. No acepta subdominios implicitos: cada
+// dominio debe estar listado explicitamente.
 func AllowsOrigin(config SiteConfig, origin string) bool {
 	host := normalizedHost(origin)
 	if host == "" {
@@ -115,20 +116,39 @@ func AllowsOrigin(config SiteConfig, origin string) bool {
 
 // normalizedHost extrae y normaliza el host desde un origin.
 //
-// Recibe una URL absoluta y devuelve el hostname sin puerto, en minusculas y
-// sin punto final. Devuelve cadena vacia cuando no puede parsearse.
+// Recibe una URL absoluta o un host directo y devuelve host con puerto opcional,
+// en minusculas, sin punto final y sin prefijo www. Devuelve cadena vacia
+// cuando no puede parsearse.
 func normalizedHost(origin string) string {
-	parsed, err := url.Parse(strings.TrimSpace(origin))
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return ""
+	}
+	parsed, err := url.Parse(origin)
 	if err != nil {
 		return ""
 	}
-	return normalizeDomain(parsed.Hostname())
+	if parsed.Host != "" {
+		return normalizeDomain(parsed.Host)
+	}
+	if parsed.Scheme == "" && !strings.Contains(origin, "/") {
+		return normalizeDomain(origin)
+	}
+	return ""
 }
 
 // normalizeDomain normaliza un dominio para comparaciones exactas.
 //
-// Recibe un dominio posiblemente con espacios, mayusculas o punto final y
-// devuelve su forma canonica simple. No valida DNS.
+// Recibe un dominio posiblemente con esquema, espacios, mayusculas, punto final
+// o prefijo www. Devuelve host canonico con puerto opcional. No valida DNS.
 func normalizeDomain(domain string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(domain); err == nil && parsed.Host != "" {
+		domain = parsed.Host
+	}
+	domain = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(domain)), ".")
+	return strings.TrimPrefix(domain, "www.")
 }

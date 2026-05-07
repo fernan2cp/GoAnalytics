@@ -2,13 +2,18 @@ package redis
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
 
+	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/domain/site"
 )
 
@@ -37,17 +42,18 @@ func NewSiteCache(client goredis.UniversalClient, negativeCacheTTL time.Duration
 	return &SiteCache{client: client, negativeCacheTTL: negativeCacheTTL}, nil
 }
 
-// GetByPublicID obtiene metadata de site desde Redis.
+// Get obtiene metadata de site desde Redis.
 //
-// Recibe contexto y site_code publico. Devuelve SiteConfig, indicador de
-// existencia y error ante fallas de Redis o JSON invalido. Si existe negative
-// cache, devuelve found=false sin consultar el resolver.
-func (cache *SiteCache) GetByPublicID(ctx context.Context, sitePublicID string) (site.SiteConfig, bool, error) {
-	sitePublicID = strings.TrimSpace(sitePublicID)
-	if sitePublicID == "" {
+// Recibe contexto y clave compuesta de resolucion. Devuelve SiteConfig,
+// indicador de existencia y error ante fallas de Redis o JSON invalido. Si
+// existe negative cache para el site, devuelve found=false sin consultar el
+// resolver.
+func (cache *SiteCache) Get(ctx context.Context, key outbound.SiteCacheKey) (site.SiteConfig, bool, error) {
+	siteCode := strings.TrimSpace(key.SiteCode)
+	if siteCode == "" {
 		return site.SiteConfig{}, false, nil
 	}
-	negative, err := cache.client.Exists(ctx, negativeCacheKey(sitePublicID)).Result()
+	negative, err := cache.client.Exists(ctx, negativeCacheKey(siteCode)).Result()
 	if err != nil {
 		return site.SiteConfig{}, false, err
 	}
@@ -55,7 +61,7 @@ func (cache *SiteCache) GetByPublicID(ctx context.Context, sitePublicID string) 
 		return site.SiteConfig{}, false, ErrNegativeCached
 	}
 
-	value, err := cache.client.Get(ctx, siteCacheKey(sitePublicID)).Result()
+	value, err := cache.client.Get(ctx, siteCacheKey(key)).Result()
 	if err == goredis.Nil {
 		return site.SiteConfig{}, false, nil
 	}
@@ -72,15 +78,15 @@ func (cache *SiteCache) GetByPublicID(ctx context.Context, sitePublicID string) 
 
 // Set guarda metadata de site en Redis.
 //
-// Recibe contexto, SiteConfig y TTL. Serializa la metadata con el contrato
-// documentado y elimina negative cache previa para el mismo site. Devuelve
-// error si Redis rechaza alguna operacion.
-func (cache *SiteCache) Set(ctx context.Context, config site.SiteConfig, ttl time.Duration) error {
+// Recibe contexto, clave compuesta, SiteConfig y TTL. Serializa la metadata con
+// el contrato documentado y elimina negative cache previa para el mismo site.
+// Devuelve error si Redis rechaza alguna operacion.
+func (cache *SiteCache) Set(ctx context.Context, key outbound.SiteCacheKey, config site.SiteConfig, ttl time.Duration) error {
 	payload, err := json.Marshal(sitePayloadFromDomain(config))
 	if err != nil {
 		return err
 	}
-	if err := cache.client.Set(ctx, siteCacheKey(config.SiteCode), payload, ttl).Err(); err != nil {
+	if err := cache.client.Set(ctx, siteCacheKey(key), payload, ttl).Err(); err != nil {
 		return err
 	}
 	return cache.client.Del(ctx, negativeCacheKey(config.SiteCode)).Err()
@@ -99,9 +105,15 @@ func (cache *SiteCache) MarkNotFound(ctx context.Context, siteCode string) error
 
 // siteCacheKey construye la clave Redis de metadata.
 //
-// Recibe site_code publico y devuelve la clave estable documentada.
-func siteCacheKey(siteCode string) string {
-	return siteCachePrefix + strings.TrimSpace(siteCode)
+// Recibe una clave compuesta y devuelve la clave estable documentada para
+// resolver por site_code, origin, env y token_version sin exponer el origin
+// completo en Redis.
+func siteCacheKey(key outbound.SiteCacheKey) string {
+	return siteCachePrefix +
+		strings.TrimSpace(key.SiteCode) +
+		":env:" + strings.TrimSpace(key.Environment) +
+		":tv:" + strconv.Itoa(key.TokenVersion) +
+		":origin:" + originHash(key.Origin)
 }
 
 // negativeCacheKey construye la clave Redis de negative cache.
@@ -109,6 +121,18 @@ func siteCacheKey(siteCode string) string {
 // Recibe site_code publico y devuelve la clave estable documentada.
 func negativeCacheKey(siteCode string) string {
 	return negativeCachePrefix + strings.TrimSpace(siteCode)
+}
+
+// originHash normaliza y hashea el origin para usarlo como parte de la clave.
+func originHash(origin string) string {
+	parsed, err := url.Parse(strings.TrimSpace(origin))
+	normalized := strings.TrimSpace(origin)
+	if err == nil && parsed.Host != "" {
+		normalized = parsed.Host
+	}
+	normalized = strings.TrimPrefix(strings.TrimSuffix(strings.ToLower(strings.TrimSpace(normalized)), "."), "www.")
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
 }
 
 type sitePayload struct {

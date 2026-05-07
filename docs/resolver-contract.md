@@ -14,7 +14,8 @@ Content-Type: application/json
 {
   "site_code": "pub_site_abc123",
   "origin": "https://cliente.com",
-  "env": "production"
+  "env": "production",
+  "token_version": 1
 }
 ```
 

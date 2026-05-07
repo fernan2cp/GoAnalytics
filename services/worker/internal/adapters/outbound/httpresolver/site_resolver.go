@@ -80,9 +80,10 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 	}
 
 	body, err := json.Marshal(resolveRequest{
-		SiteCode:    input.SiteCode,
-		Origin:      input.Origin,
-		Environment: input.Environment,
+		SiteCode:     input.SiteCode,
+		Origin:       input.Origin,
+		Environment:  input.Environment,
+		TokenVersion: input.TokenVersion,
 	})
 	if err != nil {
 		return site.SiteConfig{}, err
@@ -122,7 +123,7 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 		}
 		return site.SiteConfig{}, fmt.Errorf("%w: %s", ErrResolverRejected, payload.Error)
 	}
-	return payload.toDomain(), nil
+	return payload.toDomain(input), nil
 }
 
 // markNotFound guarda negative cache cuando el resolver confirma ausencia.
@@ -137,9 +138,10 @@ func (resolver *SiteResolver) markNotFound(ctx context.Context, siteCode string)
 }
 
 type resolveRequest struct {
-	SiteCode    string `json:"site_code"`
-	Origin      string `json:"origin"`
-	Environment string `json:"env"`
+	SiteCode     string `json:"site_code"`
+	Origin       string `json:"origin"`
+	Environment  string `json:"env"`
+	TokenVersion int    `json:"token_version"`
 }
 
 type resolveResponse struct {
@@ -155,7 +157,19 @@ type resolveResponse struct {
 	Error           string   `json:"error"`
 }
 
-func (payload resolveResponse) toDomain() site.SiteConfig {
+func (payload resolveResponse) toDomain(input outbound.ResolveSiteInput) site.SiteConfig {
+	tokenVersion := payload.TokenVersion
+	if tokenVersion <= 0 {
+		tokenVersion = input.TokenVersion
+	}
+	sampleRate := payload.SampleRate
+	if sampleRate <= 0 {
+		sampleRate = 1
+	}
+	schemaVersion := payload.SchemaVersion
+	if schemaVersion <= 0 {
+		schemaVersion = 1
+	}
 	return site.SiteConfig{
 		SiteCode:        payload.SiteCode,
 		TenantID:        payload.TenantID,
@@ -163,8 +177,8 @@ func (payload resolveResponse) toDomain() site.SiteConfig {
 		Status:          payload.Status,
 		TrackingEnabled: payload.TrackingEnabled,
 		AllowedDomains:  payload.AllowedDomains,
-		TokenVersion:    payload.TokenVersion,
-		SampleRate:      payload.SampleRate,
-		SchemaVersion:   payload.SchemaVersion,
+		TokenVersion:    tokenVersion,
+		SampleRate:      sampleRate,
+		SchemaVersion:   schemaVersion,
 	}
 }

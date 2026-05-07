@@ -88,7 +88,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		Config:      config,
 		RedisClient: redisClient,
 		Logger:      appLogger,
-		Handler:     inboundhttp.NewRouter(eventsHandler, inboundhttp.NewHealthHandler(), readyHandler),
+		Handler:     inboundhttp.NewRouter(eventsHandler, inboundhttp.NewHealthHandler(), readyHandler, config.AllowedOrigins),
 	}, nil
 }
 

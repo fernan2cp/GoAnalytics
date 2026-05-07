@@ -116,18 +116,43 @@ func TestIngestRejectsEmptyAndOversizedBatch(t *testing.T) {
 	}
 }
 
-func TestIngestRejectsInvalidEventDoesNotPublish(t *testing.T) {
+func TestIngestRejectsInvalidEventWithoutFailingBatch(t *testing.T) {
 	request := validRequest()
 	request.Events[0].EventName = ""
 	publisher := &fakePublisher{}
 	useCase := newTestUseCase(time.Now(), publisher, &fakeRateLimiter{allow: true}, nil)
 
-	_, err := useCase.Ingest(context.Background(), request)
-	if !errors.Is(err, ErrInvalidPayload) {
-		t.Fatalf("Ingest() error = %v, want ErrInvalidPayload", err)
+	response, err := useCase.Ingest(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Ingest() error = %v", err)
 	}
-	if len(publisher.events) != 0 {
-		t.Fatalf("published events = %d, want 0", len(publisher.events))
+	if response.Accepted != 0 || response.Rejected != 1 {
+		t.Fatalf("response = %#v, want accepted=0 rejected=1", response)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("published events = %d, want 1 para auditoria del worker", len(publisher.events))
+	}
+}
+
+func TestIngestPublishesValidEventsAndSkipsInvalidOnes(t *testing.T) {
+	request := oversizedRequest(2)
+	request.Events[1].EventID = "evt_invalid"
+	request.Events[1].Path = ""
+	publisher := &fakePublisher{}
+	useCase := newTestUseCase(time.Now(), publisher, &fakeRateLimiter{allow: true}, nil)
+
+	response, err := useCase.Ingest(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Ingest() error = %v", err)
+	}
+	if response.Accepted != 1 || response.Rejected != 1 {
+		t.Fatalf("response = %#v, want accepted=1 rejected=1", response)
+	}
+	if len(response.EventIDs) != 1 || response.EventIDs[0] != request.Events[0].EventID {
+		t.Fatalf("EventIDs = %#v, want first valid event id", response.EventIDs)
+	}
+	if len(publisher.events) != 2 {
+		t.Fatalf("published events = %d, want 2 para que el worker audite rechazos", len(publisher.events))
 	}
 }
 
@@ -220,7 +245,7 @@ func validClaims(now time.Time) token.TrackingClaims {
 	return token.TrackingClaims{
 		Issuer:       "main-backend",
 		Audience:     "analytics-ingest",
-		SiteCode: "pub_site_abc123",
+		SiteCode:     "pub_site_abc123",
 		Environment:  "production",
 		TokenVersion: 1,
 		IssuedAt:     now.Add(-time.Minute),

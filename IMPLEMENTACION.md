@@ -16,9 +16,9 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 5 | Base PostgreSQL analytics | Completada | 2026-05-05 | 2026-05-05 | Migraciones `up/down`, indices base, repositorios pgx, insercion batch y ejecucion con `golang-migrate` configurados. |
 | Fase 6 | SDK TypeScript | Completada | 2026-05-05 | 2026-05-05 | Cliente funcional con `track`, `page`, `identify`, queue, batching, `fetch keepalive`, soporte opcional de `sendBeacon` y tipos exportados. |
 | Fase 7 | Docker y entorno local | Completada | 2026-05-05 | 2026-05-06 | Dockerfiles, servicios Go en Compose, healthchecks HTTP y Makefile validados. |
-| Fase 8 | Integracion con backend principal | Pendiente |  |  | JWT, hidratacion Redis y resolver interno. |
-| Fase 9 | Seguridad y hardening | Parcial | 2026-05-05 |  | Rate limit logico definido en application; faltan adaptador Redis, CORS, Origin/Referer, payload size y bloqueo de secretos. |
-| Fase 10 | Observabilidad | Pendiente |  |  | Health, readiness, logs y metricas basicas. |
+| Fase 8 | Integracion con backend principal | Completada | 2026-05-06 | 2026-05-06 | JWT, hidratacion Redis y resolver interno. |
+| Fase 9 | Seguridad y hardening | Parcial | 2026-05-05 |  | CORS, Origin/Referer y rate limits implementados. |
+| Fase 10 | Observabilidad | Completada | 2026-05-05 | 2026-05-07 | Health, readiness y logs estructurados funcionales. |
 | Fase 11 | Preparacion produccion | Pendiente |  |  | Secretos, recursos, backups y reinicios. |
 | Fase 12 | Publicacion futura SDK npm | Pendiente |  |  | Versionado, README SDK y pipeline futuro. |
 
@@ -118,8 +118,8 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 9 - Seguridad y hardening
 
-- [ ] Validar CORS.
-- [ ] Validar Origin/Referer.
+- [x] Validar CORS.
+- [x] Validar Origin/Referer.
 - [x] Definir rate limit por site en el nucleo de ingesta.
 - [x] Definir rate limit por IP en el nucleo de ingesta.
 - [x] Implementar rate limit Redis por site.
@@ -129,9 +129,9 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 
 ## Fase 10 - Observabilidad
 
-- [ ] Agregar `GET /health`.
-- [ ] Agregar `GET /ready`.
-- [ ] Agregar logs estructurados.
+- [x] Agregar `GET /health`.
+- [x] Agregar `GET /ready`.
+- [x] Agregar logs estructurados.
 - [ ] Preparar metricas basicas.
 - [ ] Preparar Prometheus futuro.
 

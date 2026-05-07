@@ -228,6 +228,8 @@ En un **proyecto multitenant**, el backend debe generar este payload de manera *
 | `JWTID` | `jti` | String | **Dinámico** | Identificador único obligatorio del token. |
 
 > **Importante para Multitenant:** El uso de `tenant_hint` y `site_hint` permite que Go Analytics procese los eventos de forma mucho más rápida al evitar búsquedas complejas para resolver a qué tenant pertenece el `site_code`.
+> 
+> **Nota sobre Sincronización de Tiempo:** Asegúrese de que el servidor que genera los tokens esté sincronizado con UTC. El microservicio aplica un margen de tolerancia (leeway) de 1 minuto, pero discrepancias mayores causarán el rechazo del token.
 
 ### Ejemplo de Payload JSON Dinámico
 
@@ -334,3 +336,24 @@ La URL interna del backend debe cumplir estas condiciones:
 - [ ] Backend principal expone `/internal/analytics/sites/resolve`.
 - [ ] La URL interna valida `SITE_RESOLVER_TOKEN`.
 - [ ] La URL interna devuelve metadata compatible con Go Analytics.
+
+---
+
+## 12. Resumen de variables de entorno (Configuración mínima)
+
+Para que la integración funcione correctamente, asegúrese de tener configuradas las siguientes variables en el proyecto principal:
+
+```env
+# Secreto compartido para firmar los Tracking Tokens (JWT HS256)
+GO_ANALYTICS_JWT_SECRET=change_me_in_production
+
+# Token de seguridad para la comunicación entre el Microservicio y el Backend Principal
+SITE_RESOLVER_TOKEN=change_me
+
+# Política de CORS: Orígenes permitidos (separados por coma). Use * para desarrollo local.
+CORS_ALLOWED_ORIGINS=*
+
+# Endpoint público del microservicio de ingesta (usado por el SDK en el frontend)
+VITE_GO_ANALYTICS_EVENTS_ENDPOINT=http://localhost:8080/v1/events
+```
+

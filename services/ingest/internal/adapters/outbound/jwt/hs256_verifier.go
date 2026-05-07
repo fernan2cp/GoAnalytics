@@ -141,8 +141,11 @@ func (verifier *HS256Verifier) toTrackingClaims(claims jwtClaims) (token.Trackin
 	if err != nil {
 		return token.TrackingClaims{}, fmt.Errorf("%w: exp", ErrInvalidJWTClaims)
 	}
-	if verifier.maxTokenLifetime > 0 && expiresAt.Sub(issuedAt) > verifier.maxTokenLifetime {
-		return token.TrackingClaims{}, ErrTokenLifetimeHigh
+	// Permitimos un margen de 1 minuto para clock skew o discrepancias de redondeo
+	// entre el emisor y el receptor.
+	leeway := time.Minute
+	if verifier.maxTokenLifetime > 0 && expiresAt.Sub(issuedAt) > (verifier.maxTokenLifetime + leeway) {
+		return token.TrackingClaims{}, fmt.Errorf("%w: %v > %v", ErrTokenLifetimeHigh, expiresAt.Sub(issuedAt), verifier.maxTokenLifetime)
 	}
 
 	return token.TrackingClaims{

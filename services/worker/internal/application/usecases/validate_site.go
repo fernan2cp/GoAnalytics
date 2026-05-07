@@ -61,12 +61,18 @@ func (uc *ValidateSiteUseCase) Validate(ctx context.Context, raw dto.RawEvent) (
 		return site.SiteConfig{}, ErrValidateSiteInputInvalid
 	}
 
-	config, found, err := uc.siteCache.GetByPublicID(ctx, raw.SiteCode)
+	cacheKey := outbound.SiteCacheKey{
+		SiteCode:     raw.SiteCode,
+		Origin:       raw.Origin,
+		Environment:  raw.Environment,
+		TokenVersion: raw.TokenVersion,
+	}
+	config, found, err := uc.siteCache.Get(ctx, cacheKey)
 	if err != nil {
 		return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteNotAvailable, err)
 	}
 	if !found {
-		config, err = uc.rehydrateSite.Rehydrate(ctx, raw.SiteCode, raw.Origin, raw.Environment)
+		config, err = uc.rehydrateSite.Rehydrate(ctx, cacheKey)
 		if err != nil {
 			return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteNotAvailable, err)
 		}
