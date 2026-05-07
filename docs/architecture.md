@@ -16,6 +16,6 @@ La decision de persistencia esta documentada en `docs/persistence.md`: PostgreSQ
 - Backend principal: genera JWT, hidrata Redis y expone una URL interna de rehidratacion.
 - SDK: crea eventos, ids de usuario anonimo y sesion, y envia batches.
 - Ingest: valida token y estructura basica, aplica rate limit y publica en stream.
-- Worker: consume stream, valida site, deduplica y persiste.
+- Worker: consume stream, valida site, aplica motor de deduplicacion avanzado (Exacta, Idempotencia, Logica, Semantica), valida seguridad de payload y persiste.
 - Redis: stream, cache de site, cooldown, negative cache y rate limit.
 - PostgreSQL: almacenamiento inicial de eventos validos y rechazados, accesible solo desde adaptadores de infraestructura del worker.

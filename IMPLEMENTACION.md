@@ -12,9 +12,9 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 | Fase 1 | Nucleo hexagonal de ingesta | Completada | 2026-05-05 | 2026-05-05 | Dominio, DTOs, puertos y caso de uso testeable validados con Go en ruta explicita. |
 | Fase 2 | API HTTP de ingesta | Completada | 2026-05-05 | 2026-05-05 | Endpoint `POST /v1/events`, JWT HS256, Redis Stream, rate limit Redis y bootstrap conectados. |
 | Fase 3 | Nucleo hexagonal del worker | Completada | 2026-05-05 | 2026-05-05 | Procesamiento testeable sin Redis ni PostgreSQL. |
-| Fase 4 | Worker con Redis Stream y PostgreSQL | Completada | 2026-05-05 | 2026-05-05 | Consumer Redis Stream, cache/resolver, cooldown, negative cache, repositorios pgx y deduplicacion conectados. |
-| Fase 5 | Base PostgreSQL analytics | Completada | 2026-05-05 | 2026-05-05 | Migraciones `up/down`, indices base, repositorios pgx, insercion batch y ejecucion con `golang-migrate` configurados. |
-| Fase 6 | SDK TypeScript | Completada | 2026-05-05 | 2026-05-05 | Cliente funcional con `track`, `page`, `identify`, queue, batching, `fetch keepalive`, soporte opcional de `sendBeacon` y tipos exportados. |
+| Fase 4 | Worker con Redis Stream y PostgreSQL | Completada | 2026-05-05 | 2026-05-07 | Consumer Redis Stream, cache/resolver, deduplicación avanzada (exacta, lógica, semántica e idempotente) y persistencia pgx. |
+| Fase 5 | Base PostgreSQL analytics | Completada | 2026-05-05 | 2026-05-07 | Migraciones `up/down`, indices base, secuencia de idempotencia y repositorios pgx configurados. |
+| Fase 6 | SDK TypeScript | Parcial | 2026-05-05 |  | Cliente funcional con `track`, `page`, `identify`, queue, batching y soporte para campos de idempotencia. |
 | Fase 7 | Docker y entorno local | Completada | 2026-05-05 | 2026-05-06 | Dockerfiles, servicios Go en Compose, healthchecks HTTP y Makefile validados. |
 | Fase 8 | Integracion con backend principal | Completada | 2026-05-06 | 2026-05-06 | JWT, hidratacion Redis y resolver interno. |
 | Fase 9 | Seguridad y hardening | Parcial | 2026-05-05 |  | CORS, Origin/Referer y rate limits implementados. |
@@ -73,7 +73,8 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Implementar negative cache.
 - [x] Implementar conexion PostgreSQL en bootstrap del worker con `pgxpool`.
 - [x] Implementar repositorios PostgreSQL con `pgx`.
-- [x] Implementar deduplicacion por `event_id`.
+- [x] Implementar deduplicacion avanzada (exacta, logica, semantica e idempotente).
+- [x] Implementar motor de seguridad de payload para bloquear claves sensibles.
 
 ## Fase 5 - Base PostgreSQL analytics
 
@@ -81,6 +82,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Crear migracion de `analytics_rejected_events`.
 - [x] Crear indices base.
 - [x] Configurar ejecucion de migraciones con `golang-migrate`.
+- [x] Crear migracion para secuencia de idempotencia de eventos.
 - [x] Implementar insercion batch.
 
 ## Fase 6 - SDK TypeScript
@@ -94,6 +96,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Implementar `sendBeacon`.
 - [x] Implementar fallback `fetch` con `keepalive`.
 - [x] Exportar tipos.
+- [/] Integrar generacion automatica de claves de idempotencia.
 
 ## Fase 7 - Docker y entorno local
 
@@ -124,7 +127,7 @@ Go Analytics esta en fase inicial. La prioridad actual es dejar lista la estruct
 - [x] Definir rate limit por IP en el nucleo de ingesta.
 - [x] Implementar rate limit Redis por site.
 - [x] Implementar rate limit Redis por IP.
-- [ ] Bloquear claves sensibles.
+- [x] Bloquear claves sensibles en properties y context.
 - [ ] Guardar IP hasheada, nunca cruda.
 
 ## Fase 10 - Observabilidad

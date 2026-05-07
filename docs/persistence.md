@@ -49,6 +49,8 @@ migrations/postgres/001_create_analytics_events.up.sql
 migrations/postgres/001_create_analytics_events.down.sql
 migrations/postgres/002_create_rejected_events.up.sql
 migrations/postgres/002_create_rejected_events.down.sql
+migrations/postgres/003_event_idempotency_sequence.up.sql
+migrations/postgres/003_event_idempotency_sequence.down.sql
 ```
 
 En desarrollo local, las migraciones se ejecutan con:
