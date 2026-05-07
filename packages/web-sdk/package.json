@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",
-    "test": "echo \"Sin tests del SDK todavia\""
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "keywords": [
     "analytics",

@@ -129,6 +129,8 @@ services:
       - "3000:3000"
     volumes:
       - ./docs:/docs:ro
+      - ./README.md:/app/extra-docs/PROJECT_README.md:ro
+      - ./packages/web-sdk/README.md:/app/extra-docs/SDK_README.md:ro
       - ./packages/web-sdk/dist:/sdk:ro
       - ./sandbox/public:/app/public:ro
     depends_on:

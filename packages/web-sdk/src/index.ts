@@ -46,6 +46,7 @@ export type PageOptions = Omit<TrackOptions, "origin" | "url" | "path" | "referr
 export type AnalyticsClient = {
   track(eventName: string, properties?: EventProperties, options?: TrackOptions): void;
   page(properties?: EventProperties, options?: PageOptions): void;
+  checkoutStarted(payload: CheckoutStartedPayload, options?: TrackOptions): void;
   formAttempt(payload: FormAttemptPayload, options?: TrackOptions): void;
   formCompleted(payload: FormCompletedPayload, options?: TrackOptions): void;
   formAbandoned(payload: FormAbandonedPayload, options?: TrackOptions): void;
@@ -78,6 +79,15 @@ type AnalyticsEventPayload = {
 };
 
 export type FormFieldErrors = Record<string, string>;
+
+export type CheckoutStartedPayload = {
+  cart_id?: string;
+  checkout_id?: string;
+  order_draft_id?: string;
+  value?: number;
+  currency?: string;
+  items_count?: number;
+};
 
 export type FormAttemptPayload = {
   form_id: string;
@@ -120,6 +130,7 @@ const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_QUEUE_SIZE = 100;
 const DEFAULT_MAX_PAYLOAD_BYTES = 64 * 1024;
+const PAGE_VIEW_DEDUPLICATION_WINDOW_MS = 1000;
 const ANONYMOUS_ID_KEY = "goanalytics:anonymous_id";
 const SESSION_KEY = "goanalytics:session";
 const TAB_ID_KEY = "goanalytics:tab_id";
@@ -140,6 +151,7 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   const tabId = currentTabId(tabStorage);
   let sequence = currentSequence(tabStorage);
   let previousLogicalEventId = tabStorage.get(PREVIOUS_LOGICAL_EVENT_ID_KEY) ?? "";
+  const recentPageViews = new Map<string, number>();
 
   if (!anonymousId) {
     anonymousId = `anon_${createId()}`;
@@ -154,17 +166,21 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   function track(eventName: string, properties: EventProperties = {}, eventOptions: TrackOptions = {}): void {
     try {
       const sessionId = eventOptions.sessionId ?? currentSessionId(storage, config.sessionTimeoutMs);
+      const resolvedTabId = eventOptions.tabId ?? tabId;
       const nextSequence = eventOptions.sequence ?? nextSequenceValue(tabStorage, sequence);
       sequence = nextSequence;
+      const logicalEventId = eventOptions.logicalEventId ?? logicalEventIdForEvent(eventName, sessionId, resolvedTabId, nextSequence, properties);
+      const idempotencyKey = eventOptions.idempotencyKey ?? idempotencyKeyForEvent(eventName, sessionId, resolvedTabId, logicalEventId);
       const event = buildEvent(eventName, properties, {
         ...eventOptions,
         anonymousId: eventOptions.anonymousId ?? persistedAnonymousId,
         sessionId,
         userId: eventOptions.userId ?? userId,
-        tabId: eventOptions.tabId ?? tabId,
+        tabId: resolvedTabId,
         sequence: nextSequence,
         previousLogicalEventId: eventOptions.previousLogicalEventId ?? previousLogicalEventId,
-        logicalEventId: eventOptions.logicalEventId ?? logicalEventIdForEvent(eventName, sessionId, eventOptions.tabId ?? tabId, nextSequence, properties)
+        logicalEventId,
+        idempotencyKey
       });
 
       previousLogicalEventId = event.logical_event_id ?? previousLogicalEventId;
@@ -182,7 +198,15 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
 
   function page(properties: EventProperties = {}, pageOptions: PageOptions = {}): void {
     const locationInfo = browserLocation();
-    const navigationId = pageOptions.navigationId ?? currentNavigationId();
+    const path = pageOptions.path ?? locationInfo.path;
+    const sessionId = pageOptions.sessionId ?? currentSessionId(storage, config.sessionTimeoutMs);
+    const resolvedTabId = pageOptions.tabId ?? tabId;
+    const navigationId = pageOptions.navigationId ?? currentNavigationId(path);
+    const logicalEventId = pageOptions.logicalEventId ?? pageLogicalEventId(navigationId, sessionId, resolvedTabId, path);
+    const deduplicationKey = stableLogicalEventId(["page_view", sessionId, resolvedTabId, path, logicalEventId]);
+    if (shouldSkipDuplicatePageView(recentPageViews, deduplicationKey, PAGE_VIEW_DEDUPLICATION_WINDOW_MS)) {
+      return;
+    }
     const pageProperties: EventProperties = {
       navigation_id: navigationId,
       title: pageOptions.title ?? browserTitle(),
@@ -191,11 +215,25 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
 
     track("page_view", pageProperties, {
       ...pageOptions,
-      logicalEventId: pageOptions.logicalEventId ?? pageLogicalEventId(navigationId, sessionIdFromStorage(storage, config.sessionTimeoutMs), tabId, locationInfo.path),
+      sessionId,
+      tabId: resolvedTabId,
+      logicalEventId,
       origin: pageOptions.origin ?? locationInfo.origin,
       url: pageOptions.url ?? locationInfo.url,
-      path: pageOptions.path ?? locationInfo.path,
+      path,
       referrer: pageOptions.referrer ?? browserReferrer()
+    });
+  }
+
+  function checkoutStarted(payload: CheckoutStartedPayload, eventOptions: TrackOptions = {}): void {
+    const sessionId = eventOptions.sessionId ?? currentSessionId(storage, config.sessionTimeoutMs);
+    const identity = checkoutStartedIdentity(payload);
+    const logicalEventId = identity ? stableLogicalEventId(["checkout_started", sessionId, identity]) : undefined;
+    track("checkout_started", checkoutStartedProperties(payload), {
+      ...eventOptions,
+      sessionId,
+      critical: eventOptions.critical ?? true,
+      logicalEventId: eventOptions.logicalEventId ?? logicalEventId
     });
   }
 
@@ -264,6 +302,7 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   return {
     track,
     page,
+    checkoutStarted,
     formAttempt,
     formCompleted,
     formAbandoned,
@@ -385,10 +424,6 @@ function currentSessionId(storage: StorageAdapter, timeoutMs: number): string {
   return sessionId;
 }
 
-function sessionIdFromStorage(storage: StorageAdapter, timeoutMs: number): string {
-  return currentSessionId(storage, timeoutMs);
-}
-
 function currentTabId(storage: StorageAdapter): string {
   const stored = storage.get(TAB_ID_KEY);
   if (stored) {
@@ -413,39 +448,106 @@ function nextSequenceValue(storage: StorageAdapter, current: number): number {
 function logicalEventIdForEvent(eventName: string, sessionId: string, tabId: string, sequence: number, properties: EventProperties): string {
   if (eventName === "page_view") {
     const navigationId = typeof properties.navigation_id === "string" ? properties.navigation_id : "";
-    return pageLogicalEventId(navigationId, sessionId, tabId, browserLocation().path);
+    const path = browserLocation().path;
+    return pageLogicalEventId(navigationId, sessionId, tabId, path);
+  }
+  if (eventName === "checkout_started") {
+    const identity = eventPropertyString(properties, "checkout_id") ?? eventPropertyString(properties, "cart_id") ?? eventPropertyString(properties, "order_draft_id");
+    if (identity) {
+      return stableLogicalEventId([eventName, sessionId, identity]);
+    }
   }
   if (FORM_EVENT_NAMES.has(eventName)) {
     const formId = typeof properties.form_id === "string" ? properties.form_id : "";
     const stepId = typeof properties.step_id === "string" ? properties.step_id : "";
-    return stableLogicalEventId([eventName, sessionId, tabId, formId, stepId, String(sequence)]);
+    if (formId || stepId) {
+      return stableLogicalEventId([eventName, sessionId, tabId, formId, stepId]);
+    }
   }
   return stableLogicalEventId([eventName, sessionId, tabId, String(sequence)]);
 }
 
 function pageLogicalEventId(navigationId: string | undefined, sessionId: string, tabId: string, path: string): string {
-  return stableLogicalEventId(["page_view", sessionId, tabId, navigationId || currentNavigationId(), path]);
+  return stableLogicalEventId(["page_view", sessionId, tabId, navigationId || currentNavigationId(path), path]);
 }
 
-function currentNavigationId(): string {
+function currentNavigationId(path: string): string {
   const storage = createTabStorage();
-  const timeOrigin = String(globalThis.performance?.timeOrigin ?? Date.now());
   const stored = storage.get(NAVIGATION_ID_KEY);
   if (stored) {
     try {
-      const parsed = JSON.parse(stored) as { id?: string; timeOrigin?: string };
-      if (parsed.id && parsed.timeOrigin === timeOrigin) {
+      const parsed = JSON.parse(stored) as { id?: string; path?: string };
+      if (parsed.id && parsed.path === path) {
         return parsed.id;
       }
     } catch {
-      if (stored.startsWith("nav_")) {
+      if (stored.startsWith("nav_") && path === browserLocation().path) {
         return stored;
       }
     }
   }
   const navigationId = `nav_${createId()}`;
-  storage.set(NAVIGATION_ID_KEY, JSON.stringify({ id: navigationId, timeOrigin }));
+  storage.set(NAVIGATION_ID_KEY, JSON.stringify({ id: navigationId, path }));
   return navigationId;
+}
+
+function idempotencyKeyForEvent(eventName: string, sessionId: string, tabId: string, logicalEventId: string | undefined): string | undefined {
+  if (!logicalEventId) {
+    return undefined;
+  }
+  return stableLogicalEventId([eventName, sessionId, tabId, logicalEventId]);
+}
+
+function shouldSkipDuplicatePageView(recentPageViews: Map<string, number>, key: string, windowMs: number): boolean {
+  const now = Date.now();
+  const previous = recentPageViews.get(key);
+  if (previous && now - previous < windowMs) {
+    return true;
+  }
+  recentPageViews.set(key, now);
+  removeExpiredPageViews(recentPageViews, now, windowMs);
+  return false;
+}
+
+function removeExpiredPageViews(recentPageViews: Map<string, number>, now: number, windowMs: number): void {
+  for (const [key, timestamp] of recentPageViews.entries()) {
+    if (now - timestamp >= windowMs) {
+      recentPageViews.delete(key);
+    }
+  }
+}
+
+function checkoutStartedIdentity(payload: CheckoutStartedPayload): string | undefined {
+  return nonEmpty(payload.checkout_id) ?? nonEmpty(payload.cart_id) ?? nonEmpty(payload.order_draft_id);
+}
+
+function checkoutStartedProperties(payload: CheckoutStartedPayload): EventProperties {
+  const properties: EventProperties = {};
+  addOptionalString(properties, "checkout_id", payload.checkout_id);
+  addOptionalString(properties, "cart_id", payload.cart_id);
+  addOptionalString(properties, "order_draft_id", payload.order_draft_id);
+  addOptionalNumber(properties, "value", payload.value);
+  addOptionalString(properties, "currency", payload.currency);
+  addOptionalNumber(properties, "items_count", payload.items_count);
+  return properties;
+}
+
+function addOptionalString(properties: EventProperties, key: string, value: string | undefined): void {
+  const sanitized = nonEmpty(value);
+  if (sanitized) {
+    properties[key] = sanitized;
+  }
+}
+
+function addOptionalNumber(properties: EventProperties, key: string, value: number | undefined): void {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    properties[key] = value;
+  }
+}
+
+function eventPropertyString(properties: EventProperties, key: string): string | undefined {
+  const value = properties[key];
+  return typeof value === "string" ? nonEmpty(value) : undefined;
 }
 
 function stableLogicalEventId(parts: string[]): string {

@@ -18,6 +18,13 @@ analytics.track("product_viewed", {
   category: "calzado"
 });
 
+analytics.checkoutStarted({
+  cart_id: "cart_123",
+  value: 99.99,
+  currency: "ARS",
+  items_count: 2
+});
+
 analytics.formAttempt({
   form_id: "checkout_address",
   step_id: "address",
@@ -34,6 +41,7 @@ analytics.formAttempt({
 - `createAnalyticsClient(options)` crea un cliente aislado del backend principal.
 - `track(eventName, properties?, options?)` encola eventos genericos.
 - `page(properties?, options?)` envia un evento `page_view` con datos de navegacion.
+- `checkoutStarted(payload, options?)` registra el inicio de checkout con identidad funcional cuando existe `checkout_id`, `cart_id` u `order_draft_id`.
 - `formAttempt(payload, options?)` registra un intento de validacion o envio.
 - `formCompleted(payload, options?)` registra un formulario completado.
 - `formAbandoned(payload, options?)` registra abandono de formulario.
@@ -61,10 +69,30 @@ type AnalyticsClientOptions = {
 };
 ```
 
-El SDK genera `event_id`, `logical_event_id`, `anonymous_id` persistente,
-`session_id`, `tab_id` y `sequence` automaticamente. `tab_id` y `sequence` se
-guardan en `sessionStorage` para conservar continuidad durante la vida de la
-pestana, incluso ante refresh. Nunca firma tokens ni conoce secretos.
+El SDK genera `event_id`, `logical_event_id`, `idempotency_key`, `anonymous_id`
+persistente, `session_id`, `tab_id` y `sequence` automaticamente. `event_id`
+identifica el intento tecnico de envio. `logical_event_id` identifica el evento
+logico y se usa como base de `idempotency_key` cuando el consumidor no la
+provee manualmente. La clave generada usa:
+
+```text
+event_name:session_id:tab_id:logical_event_id
+```
+
+`tab_id` y `sequence` se guardan en `sessionStorage` para conservar continuidad
+durante la vida de la pestana, incluso ante refresh. `navigation_id` tambien se
+guarda en `sessionStorage`, pero cambia cuando cambia el `path` para representar
+navegaciones SPA reales. Nunca firma tokens ni conoce secretos.
+
+`page()` evita encolar dos `page_view` identicos durante una ventana local de
+1000 ms. Esto reduce duplicados causados por doble inicializacion, React
+StrictMode o handlers ejecutados dos veces. Si aun asi dos intentos equivalentes
+llegan al backend, comparten `logical_event_id` e `idempotency_key`.
+
+`checkoutStarted()` marca el evento como critico por defecto. Su identidad
+funcional usa primero `checkout_id`, luego `cart_id` y finalmente
+`order_draft_id`. Si no recibe ninguno de esos campos, el evento se envia con la
+politica generica y el backend puede aplicar su fallback semantico.
 
 Los helpers de formulario no aceptan valores reales ingresados por el usuario.
 Solo transportan nombres tecnicos de campos, codigos de error y conteos.

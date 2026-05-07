@@ -160,6 +160,15 @@ func main() {
 	docsFs := http.StripPrefix("/docs/", http.FileServer(http.Dir("/docs")))
 	http.Handle("/docs/", docsFs)
 
+	// Manejadores específicos para archivos que están fuera de /docs en el host
+	// pero que queremos servir bajo la ruta /docs/ en el sandbox.
+	http.HandleFunc("/docs/PROJECT_README.md", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "/app/extra-docs/PROJECT_README.md")
+	})
+	http.HandleFunc("/docs/SDK_README.md", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "/app/extra-docs/SDK_README.md")
+	})
+
 	// Servir SDK (montado en /sdk desde el host)
 	sdkFs := http.StripPrefix("/sdk/", http.FileServer(http.Dir("/sdk")))
 	http.Handle("/sdk/", sdkFs)
