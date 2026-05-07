@@ -51,6 +51,12 @@ func (repository *EventRepository) SaveBatch(ctx context.Context, events []event
 		}
 		batch.Queue(insertEventSQL,
 			item.EventID,
+			emptyToNil(item.LogicalEventID),
+			emptyToNil(item.IdempotencyKey),
+			emptyToNil(item.TabID),
+			zeroToNil(item.Sequence),
+			emptyToNil(item.PreviousLogicalEventID),
+			emptyToNil(item.DedupStrategy),
 			item.TenantID,
 			item.SiteID,
 			item.SiteCode,
@@ -88,21 +94,37 @@ func (repository *EventRepository) SaveBatch(ctx context.Context, events []event
 
 const insertEventSQL = `
 INSERT INTO analytics_events (
-	event_id, tenant_id, site_id, site_code, env, event_name, event_version,
-	event_time, received_at, anonymous_id, user_id, session_id, origin, url,
-	path, referrer, user_agent, ip_hash, sdk_name, sdk_version, jwt_id,
-	token_version, properties, context
+	event_id, logical_event_id, idempotency_key, tab_id, sequence,
+	previous_logical_event_id, dedup_strategy, tenant_id, site_id, site_code,
+	env, event_name, event_version, event_time, received_at, anonymous_id,
+	user_id, session_id, origin, url, path, referrer, user_agent, ip_hash,
+	sdk_name, sdk_version, jwt_id, token_version, properties, context
 ) VALUES (
-	$1, $2, $3, $4, $5, $6, $7,
-	$8, $9, $10, $11, $12, $13, $14,
-	$15, $16, $17, $18, $19, $20, $21,
-	$22, $23::jsonb, $24::jsonb
+	$1, $2, $3, $4, $5,
+	$6, $7, $8, $9, $10,
+	$11, $12, $13, $14, $15, $16,
+	$17, $18, $19, $20, $21, $22, $23, $24,
+	$25, $26, $27, $28, $29::jsonb, $30::jsonb
 )
-ON CONFLICT (event_id) DO NOTHING`
+ON CONFLICT DO NOTHING`
 
 func nonNilMap(value map[string]any) map[string]any {
 	if value == nil {
 		return map[string]any{}
+	}
+	return value
+}
+
+func emptyToNil(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func zeroToNil(value int64) any {
+	if value == 0 {
+		return nil
 	}
 	return value
 }

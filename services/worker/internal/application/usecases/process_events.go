@@ -42,6 +42,7 @@ type ProcessEventsUseCase struct {
 	clock              outbound.Clock
 	logger             outbound.Logger
 	validateSite       *ValidateSiteUseCase
+	semanticRules      []SemanticDedupRule
 }
 
 // NewProcessEventsUseCase crea el caso de uso de procesamiento de eventos.
@@ -74,6 +75,7 @@ func NewProcessEventsUseCase(
 		clock,
 		logger,
 		RehydrateSiteOptions{},
+		nil,
 	)
 }
 
@@ -92,6 +94,7 @@ func NewProcessEventsUseCaseWithOptions(
 	clock outbound.Clock,
 	logger outbound.Logger,
 	rehydrateOptions RehydrateSiteOptions,
+	semanticRules []SemanticDedupRule,
 ) *ProcessEventsUseCase {
 	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, rehydrateOptions)
 	return &ProcessEventsUseCase{
@@ -104,6 +107,7 @@ func NewProcessEventsUseCaseWithOptions(
 		clock:              clock,
 		logger:             logger,
 		validateSite:       NewValidateSiteUseCase(siteCache, rehydrateSite),
+		semanticRules:      semanticRules,
 	}
 }
 
@@ -125,25 +129,40 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 
 	for _, raw := range events {
 		if err := validateRawEvent(raw); err != nil {
-			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejection.ReasonInvalidPayload, rejection.SeverityWarning))
+			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejection.ReasonInvalidPayload, rejection.SeverityWarning, ""))
+			continue
+		}
+		if blockedKey := blockedPayloadKey(raw); blockedKey != "" {
+			rejected := uc.buildRejectedEvent(raw, rejection.ReasonBlockedKey, rejection.SeverityWarning, "")
+			rejected.RawPayload["blocked_key"] = blockedKey
+			rejectedEvents = append(rejectedEvents, rejected)
 			continue
 		}
 
-		seen, err := uc.deduplicator.Seen(ctx, raw.EventID)
+		exact := exactDedupCandidate(raw)
+		seen, err := uc.deduplicator.Seen(ctx, exact.Key)
 		if err != nil {
 			return fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 		}
 		if seen {
-			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejection.ReasonDuplicateEvent, rejection.SeverityWarning))
+			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejection.ReasonDuplicateEvent, rejection.SeverityWarning, exact.Strategy))
 			continue
 		}
 
 		config, err := uc.validateSite.Validate(ctx, raw)
 		if err != nil {
-			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejectionReason(err), rejectionSeverity(err)))
+			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, rejectionReason(err), rejectionSeverity(err), ""))
 			continue
 		}
-		validEvents = append(validEvents, buildValidatedEvent(raw, config))
+		dedupStrategy, duplicateReason, err := uc.evaluateStrongAndSemanticDedup(ctx, raw, config)
+		if err != nil {
+			return err
+		}
+		if duplicateReason != "" {
+			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, duplicateReason, rejection.SeverityWarning, dedupStrategy))
+			continue
+		}
+		validEvents = append(validEvents, buildValidatedEvent(raw, config, dedupStrategy))
 	}
 
 	if len(rejectedEvents) > 0 {
@@ -156,7 +175,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			return fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, err)
 		}
 		for _, valid := range validEvents {
-			if err := uc.deduplicator.Mark(ctx, valid.EventID); err != nil {
+			if err := uc.markDeduplicationKeys(ctx, valid); err != nil {
 				return fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 			}
 		}
@@ -208,32 +227,38 @@ func validateRawEvent(raw dto.RawEvent) error {
 //
 // Recibe dto.RawEvent y site.SiteConfig ya validados. Devuelve
 // event.ValidatedEvent listo para persistir mediante EventRepository.
-func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig) event.ValidatedEvent {
+func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy string) event.ValidatedEvent {
 	return event.ValidatedEvent{
-		EventID:      raw.EventID,
-		TenantID:     config.TenantID,
-		SiteID:       config.SiteID,
-		SiteCode:     raw.SiteCode,
-		Environment:  raw.Environment,
-		EventName:    raw.EventName,
-		EventVersion: raw.EventVersion,
-		EventTime:    raw.EventTime,
-		ReceivedAt:   raw.ReceivedAt,
-		AnonymousID:  raw.AnonymousID,
-		UserID:       raw.UserID,
-		SessionID:    raw.SessionID,
-		Origin:       raw.Origin,
-		URL:          raw.URL,
-		Path:         raw.Path,
-		Referrer:     raw.Referrer,
-		UserAgent:    raw.UserAgent,
-		IPHash:       raw.IPHash,
-		SDKName:      raw.SDKName,
-		SDKVersion:   raw.SDKVersion,
-		JWTID:        raw.JWTID,
-		TokenVersion: raw.TokenVersion,
-		Properties:   event.NormalizeMap(raw.Properties),
-		Context:      event.NormalizeMap(raw.Context),
+		EventID:                raw.EventID,
+		LogicalEventID:         raw.LogicalEventID,
+		IdempotencyKey:         raw.IdempotencyKey,
+		TabID:                  raw.TabID,
+		Sequence:               raw.Sequence,
+		PreviousLogicalEventID: raw.PreviousLogicalEventID,
+		DedupStrategy:          dedupStrategy,
+		TenantID:               config.TenantID,
+		SiteID:                 config.SiteID,
+		SiteCode:               raw.SiteCode,
+		Environment:            raw.Environment,
+		EventName:              raw.EventName,
+		EventVersion:           raw.EventVersion,
+		EventTime:              raw.EventTime,
+		ReceivedAt:             raw.ReceivedAt,
+		AnonymousID:            raw.AnonymousID,
+		UserID:                 raw.UserID,
+		SessionID:              raw.SessionID,
+		Origin:                 raw.Origin,
+		URL:                    raw.URL,
+		Path:                   raw.Path,
+		Referrer:               raw.Referrer,
+		UserAgent:              raw.UserAgent,
+		IPHash:                 raw.IPHash,
+		SDKName:                raw.SDKName,
+		SDKVersion:             raw.SDKVersion,
+		JWTID:                  raw.JWTID,
+		TokenVersion:           raw.TokenVersion,
+		Properties:             event.NormalizeMap(raw.Properties),
+		Context:                event.NormalizeMap(raw.Context),
 	}
 }
 
@@ -241,7 +266,7 @@ func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig) event.Validat
 //
 // Recibe dto.RawEvent, motivo y severidad. Devuelve rejection.RejectedEvent con
 // created_at tomado del reloj inyectado y payload minimo no sensible.
-func (uc *ProcessEventsUseCase) buildRejectedEvent(raw dto.RawEvent, reason string, severity string) rejection.RejectedEvent {
+func (uc *ProcessEventsUseCase) buildRejectedEvent(raw dto.RawEvent, reason string, severity string, dedupStrategy string) rejection.RejectedEvent {
 	return rejection.RejectedEvent{
 		EventID:     raw.EventID,
 		SiteCode:    raw.SiteCode,
@@ -253,13 +278,88 @@ func (uc *ProcessEventsUseCase) buildRejectedEvent(raw dto.RawEvent, reason stri
 		IPHash:      raw.IPHash,
 		UserAgent:   raw.UserAgent,
 		RawPayload: map[string]any{
-			"event_id":      raw.EventID,
-			"event_name":    raw.EventName,
-			"event_version": raw.EventVersion,
-			"path":          raw.Path,
+			"event_id":                  raw.EventID,
+			"logical_event_id":          raw.LogicalEventID,
+			"idempotency_key":           raw.IdempotencyKey,
+			"tab_id":                    raw.TabID,
+			"sequence":                  raw.Sequence,
+			"previous_logical_event_id": raw.PreviousLogicalEventID,
+			"event_name":                raw.EventName,
+			"event_version":             raw.EventVersion,
+			"path":                      raw.Path,
+			"dedup_strategy":            dedupStrategy,
 		},
 		CreatedAt: uc.clock.Now(),
 	}
+}
+
+// evaluateStrongAndSemanticDedup aplica capas no exactas de deduplicacion.
+//
+// Recibe evento crudo y metadata validada. Devuelve la estrategia elegida, una
+// razon de duplicado si corresponde y error si falla la infraestructura.
+func (uc *ProcessEventsUseCase) evaluateStrongAndSemanticDedup(ctx context.Context, raw dto.RawEvent, config site.SiteConfig) (string, string, error) {
+	strong := strongDedupCandidate(raw, config)
+	if !strong.Empty {
+		seen, err := uc.deduplicator.Seen(ctx, strong.Key)
+		if err != nil {
+			return "", "", fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+		}
+		if seen {
+			if strong.Strategy == dedupStrategyIdempotency {
+				return strong.Strategy, rejection.ReasonDuplicateLogicalEvent, nil
+			}
+			return strong.Strategy, rejection.ReasonDuplicateLogicalEvent, nil
+		}
+		return strong.Strategy, "", nil
+	}
+	semantic := semanticDedupCandidate(raw, config, uc.semanticRules)
+	if semantic.Empty {
+		return dedupStrategyNone, "", nil
+	}
+	seen, err := uc.deduplicator.Seen(ctx, semantic.Key)
+	if err != nil {
+		return "", "", fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+	}
+	if seen {
+		return semantic.Strategy, rejection.ReasonDuplicateSemanticEvent, nil
+	}
+	return semantic.Strategy, "", nil
+}
+
+// markDeduplicationKeys registra las claves vistas despues de persistir.
+func (uc *ProcessEventsUseCase) markDeduplicationKeys(ctx context.Context, valid event.ValidatedEvent) error {
+	keys := []outbound.DeduplicationKey{
+		{Strategy: dedupStrategyExact, Key: valid.EventID},
+	}
+	config := site.SiteConfig{TenantID: valid.TenantID, SiteID: valid.SiteID}
+	if valid.IdempotencyKey != "" {
+		keys = append(keys, outbound.DeduplicationKey{Strategy: dedupStrategyIdempotency, Key: scopedKey(config, valid.IdempotencyKey)})
+	}
+	if valid.LogicalEventID != "" {
+		keys = append(keys, outbound.DeduplicationKey{Strategy: dedupStrategyLogical, Key: scopedKey(config, valid.LogicalEventID)})
+	}
+	if valid.DedupStrategy == dedupStrategySemantic {
+		raw := dto.RawEvent{
+			EventName:   valid.EventName,
+			EventTime:   valid.EventTime,
+			SiteCode:    valid.SiteCode,
+			SessionID:   valid.SessionID,
+			TabID:       valid.TabID,
+			Path:        valid.Path,
+			URL:         valid.URL,
+			AnonymousID: valid.AnonymousID,
+		}
+		semantic := semanticDedupCandidate(raw, config, uc.semanticRules)
+		if !semantic.Empty {
+			keys = append(keys, semantic.Key)
+		}
+	}
+	for _, key := range keys {
+		if err := uc.deduplicator.Mark(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // rejectionReason traduce errores de validacion a motivos persistibles.

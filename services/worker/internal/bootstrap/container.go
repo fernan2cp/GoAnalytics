@@ -100,6 +100,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		system.Clock{},
 		appLogger,
 		usecases.RehydrateSiteOptions{SiteCacheTTL: config.SiteCacheTTL},
+		config.SemanticDedupRules,
 	)
 	consumer, err := redisstream.NewConsumer(redisClient, redisstream.Config{
 		StreamName:   config.EventStreamName,

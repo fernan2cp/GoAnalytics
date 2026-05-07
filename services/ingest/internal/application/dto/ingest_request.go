@@ -26,17 +26,22 @@ type IngestRequest struct {
 // Debe incluir al menos identificador, nombre, timestamp y datos necesarios
 // para validar origen en fases posteriores. No devuelve errores por si mismo.
 type IngestEvent struct {
-	EventID      string
-	EventName    string
-	EventVersion int
-	Timestamp    time.Time
-	AnonymousID  string
-	SessionID    string
-	UserID       *string
-	Origin       string
-	URL          string
-	Path         string
-	Referrer     string
-	Properties   map[string]any
-	Context      map[string]any
+	EventID                string
+	LogicalEventID         string
+	IdempotencyKey         string
+	TabID                  string
+	Sequence               int64
+	PreviousLogicalEventID string
+	EventName              string
+	EventVersion           int
+	Timestamp              time.Time
+	AnonymousID            string
+	SessionID              string
+	UserID                 *string
+	Origin                 string
+	URL                    string
+	Path                   string
+	Referrer               string
+	Properties             map[string]any
+	Context                map[string]any
 }

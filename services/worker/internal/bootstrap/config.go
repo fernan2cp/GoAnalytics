@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"goanalytics/services/worker/internal/application/usecases"
 )
 
 // Config contiene la configuracion completa del worker.
@@ -50,6 +53,7 @@ type Config struct {
 	SiteNegativeCacheTTL  time.Duration
 	SiteCacheTTL          time.Duration
 	DeduplicationTTL      time.Duration
+	SemanticDedupRules    []usecases.SemanticDedupRule
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -123,6 +127,9 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		return Config{}, err
 	}
 	if config.DeduplicationTTL, err = getEnvSeconds("EVENT_DEDUP_TTL_SECONDS", config.DeduplicationTTL); err != nil {
+		return Config{}, err
+	}
+	if config.SemanticDedupRules, err = getEnvSemanticDedupRules("EVENT_SEMANTIC_DEDUP_RULES_JSON"); err != nil {
 		return Config{}, err
 	}
 	return config, nil
@@ -218,4 +225,38 @@ func getEnvSeconds(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, err
 	}
 	return time.Duration(value) * time.Second, nil
+}
+
+type semanticDedupRuleConfig struct {
+	EventName    string   `json:"event_name"`
+	WindowMillis int      `json:"window_ms"`
+	Fields       []string `json:"fields"`
+}
+
+// getEnvSemanticDedupRules obtiene reglas semanticas declaradas en JSON.
+//
+// Recibe el nombre de la variable de entorno. Devuelve una lista vacia cuando
+// no esta configurada. Las ventanas se expresan en milisegundos para permitir
+// valores bajos como 100ms a 300ms.
+func getEnvSemanticDedupRules(key string) ([]usecases.SemanticDedupRule, error) {
+	value := os.Getenv(key)
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var decoded []semanticDedupRuleConfig
+	if err := json.Unmarshal([]byte(value), &decoded); err != nil {
+		return nil, fmt.Errorf("%s invalido: %w", key, err)
+	}
+	rules := make([]usecases.SemanticDedupRule, 0, len(decoded))
+	for _, item := range decoded {
+		if strings.TrimSpace(item.EventName) == "" || item.WindowMillis <= 0 {
+			continue
+		}
+		rules = append(rules, usecases.SemanticDedupRule{
+			EventName: strings.TrimSpace(item.EventName),
+			Window:    time.Duration(item.WindowMillis) * time.Millisecond,
+			Fields:    item.Fields,
+		})
+	}
+	return rules, nil
 }

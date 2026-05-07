@@ -11,26 +11,31 @@ import "time"
 // Debe construirse en el adaptador de consumo. No valida por si mismo ni
 // devuelve errores; las validaciones ocurren en application y domain.
 type RawEvent struct {
-	EventID      string
-	SiteCode     string
-	Environment  string
-	TokenVersion int
-	JWTID        string
-	EventName    string
-	EventVersion int
-	EventTime    time.Time
-	ReceivedAt   time.Time
-	AnonymousID  string
-	SessionID    string
-	UserID       *string
-	Origin       string
-	URL          string
-	Path         string
-	Referrer     string
-	UserAgent    string
-	IPHash       string
-	SDKName      string
-	SDKVersion   string
-	Properties   map[string]any
-	Context      map[string]any
+	EventID                string
+	LogicalEventID         string
+	IdempotencyKey         string
+	TabID                  string
+	Sequence               int64
+	PreviousLogicalEventID string
+	SiteCode               string
+	Environment            string
+	TokenVersion           int
+	JWTID                  string
+	EventName              string
+	EventVersion           int
+	EventTime              time.Time
+	ReceivedAt             time.Time
+	AnonymousID            string
+	SessionID              string
+	UserID                 *string
+	Origin                 string
+	URL                    string
+	Path                   string
+	Referrer               string
+	UserAgent              string
+	IPHash                 string
+	SDKName                string
+	SDKVersion             string
+	Properties             map[string]any
+	Context                map[string]any
 }

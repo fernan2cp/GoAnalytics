@@ -7,11 +7,13 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"goanalytics/services/worker/internal/application/ports/outbound"
 )
 
-const dedupPrefix = "goanalytics:dedup:event:"
+const dedupPrefix = "goanalytics:dedup:"
 
-// Deduplicator implementa deduplicacion de event_id con Redis.
+// Deduplicator implementa deduplicacion por estrategia con Redis.
 //
 // Contiene cliente Redis y TTL opcional para marcas de eventos procesados.
 // Implementa el puerto Deduplicator usado por el worker.
@@ -31,29 +33,29 @@ func NewDeduplicator(client goredis.UniversalClient, ttl time.Duration) (*Dedupl
 	return &Deduplicator{client: client, ttl: ttl}, nil
 }
 
-// Seen indica si un event_id ya fue procesado.
+// Seen indica si una clave de deduplicacion ya fue procesada.
 //
-// Recibe contexto y event_id. Devuelve true si Redis contiene la marca, false
-// si no existe y error si Redis falla.
-func (dedup *Deduplicator) Seen(ctx context.Context, eventID string) (bool, error) {
-	if strings.TrimSpace(eventID) == "" {
+// Recibe contexto y clave. Devuelve true si Redis contiene la marca, false si
+// no existe y error si Redis falla.
+func (dedup *Deduplicator) Seen(ctx context.Context, key outbound.DeduplicationKey) (bool, error) {
+	if strings.TrimSpace(key.Key) == "" || strings.TrimSpace(key.Strategy) == "" {
 		return false, nil
 	}
-	count, err := dedup.client.Exists(ctx, dedupKey(eventID)).Result()
+	count, err := dedup.client.Exists(ctx, dedupKey(key)).Result()
 	return count > 0, err
 }
 
-// Mark registra un event_id como procesado.
+// Mark registra una clave de deduplicacion como procesada.
 //
-// Recibe contexto y event_id. Devuelve error si Redis rechaza la escritura. La
+// Recibe contexto y clave. Devuelve error si Redis rechaza la escritura. La
 // marca usa NX para no modificar marcas previas.
-func (dedup *Deduplicator) Mark(ctx context.Context, eventID string) error {
-	if strings.TrimSpace(eventID) == "" {
+func (dedup *Deduplicator) Mark(ctx context.Context, key outbound.DeduplicationKey) error {
+	if strings.TrimSpace(key.Key) == "" || strings.TrimSpace(key.Strategy) == "" {
 		return nil
 	}
-	return dedup.client.SetNX(ctx, dedupKey(eventID), "1", dedup.ttl).Err()
+	return dedup.client.SetNX(ctx, dedupKey(key), "1", dedup.ttl).Err()
 }
 
-func dedupKey(eventID string) string {
-	return dedupPrefix + strings.TrimSpace(eventID)
+func dedupKey(key outbound.DeduplicationKey) string {
+	return dedupPrefix + strings.TrimSpace(key.Strategy) + ":" + strings.TrimSpace(key.Key)
 }

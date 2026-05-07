@@ -230,28 +230,33 @@ func decodeRawEvent(payload string) (dto.RawEvent, error) {
 		return dto.RawEvent{}, err
 	}
 	return dto.RawEvent{
-		EventID:      raw.EventID,
-		SiteCode:     raw.SiteCode,
-		Environment:  raw.Environment,
-		TokenVersion: raw.TokenVersion,
-		JWTID:        raw.JWTID,
-		EventName:    raw.EventName,
-		EventVersion: normalizeEventVersion(raw.EventVersion),
-		EventTime:    raw.EventTime,
-		ReceivedAt:   raw.ReceivedAt,
-		AnonymousID:  raw.AnonymousID,
-		SessionID:    raw.SessionID,
-		UserID:       raw.UserID,
-		Origin:       raw.Origin,
-		URL:          raw.URL,
-		Path:         raw.Path,
-		Referrer:     raw.Referrer,
-		UserAgent:    raw.UserAgent,
-		IPHash:       raw.IPHash,
-		SDKName:      raw.SDKName,
-		SDKVersion:   raw.SDKVersion,
-		Properties:   raw.Properties,
-		Context:      raw.Context,
+		EventID:                raw.EventID,
+		LogicalEventID:         raw.LogicalEventID,
+		IdempotencyKey:         raw.IdempotencyKey,
+		TabID:                  raw.TabID,
+		Sequence:               raw.Sequence,
+		PreviousLogicalEventID: raw.PreviousLogicalEventID,
+		SiteCode:               raw.SiteCode,
+		Environment:            raw.Environment,
+		TokenVersion:           raw.TokenVersion,
+		JWTID:                  raw.JWTID,
+		EventName:              raw.EventName,
+		EventVersion:           normalizeEventVersion(raw.EventVersion),
+		EventTime:              raw.EventTime,
+		ReceivedAt:             raw.ReceivedAt,
+		AnonymousID:            raw.AnonymousID,
+		SessionID:              raw.SessionID,
+		UserID:                 raw.UserID,
+		Origin:                 raw.Origin,
+		URL:                    raw.URL,
+		Path:                   raw.Path,
+		Referrer:               raw.Referrer,
+		UserAgent:              raw.UserAgent,
+		IPHash:                 raw.IPHash,
+		SDKName:                raw.SDKName,
+		SDKVersion:             raw.SDKVersion,
+		Properties:             raw.Properties,
+		Context:                raw.Context,
 	}, nil
 }
 
@@ -263,26 +268,31 @@ func normalizeEventVersion(version int) int {
 }
 
 type streamRawEvent struct {
-	EventID      string         `json:"event_id"`
-	SiteCode     string         `json:"site_code"`
-	Environment  string         `json:"env"`
-	TokenVersion int            `json:"token_version"`
-	JWTID        string         `json:"jwt_id"`
-	EventName    string         `json:"event_name"`
-	EventVersion int            `json:"event_version"`
-	EventTime    time.Time      `json:"event_time"`
-	ReceivedAt   time.Time      `json:"received_at"`
-	AnonymousID  string         `json:"anonymous_id"`
-	SessionID    string         `json:"session_id"`
-	UserID       *string        `json:"user_id"`
-	Origin       string         `json:"origin"`
-	URL          string         `json:"url"`
-	Path         string         `json:"path"`
-	Referrer     string         `json:"referrer"`
-	UserAgent    string         `json:"user_agent"`
-	IPHash       string         `json:"ip_hash"`
-	SDKName      string         `json:"sdk_name"`
-	SDKVersion   string         `json:"sdk_version"`
-	Properties   map[string]any `json:"properties"`
-	Context      map[string]any `json:"context"`
+	EventID                string         `json:"event_id"`
+	LogicalEventID         string         `json:"logical_event_id"`
+	IdempotencyKey         string         `json:"idempotency_key"`
+	TabID                  string         `json:"tab_id"`
+	Sequence               int64          `json:"sequence"`
+	PreviousLogicalEventID string         `json:"previous_logical_event_id"`
+	SiteCode               string         `json:"site_code"`
+	Environment            string         `json:"env"`
+	TokenVersion           int            `json:"token_version"`
+	JWTID                  string         `json:"jwt_id"`
+	EventName              string         `json:"event_name"`
+	EventVersion           int            `json:"event_version"`
+	EventTime              time.Time      `json:"event_time"`
+	ReceivedAt             time.Time      `json:"received_at"`
+	AnonymousID            string         `json:"anonymous_id"`
+	SessionID              string         `json:"session_id"`
+	UserID                 *string        `json:"user_id"`
+	Origin                 string         `json:"origin"`
+	URL                    string         `json:"url"`
+	Path                   string         `json:"path"`
+	Referrer               string         `json:"referrer"`
+	UserAgent              string         `json:"user_agent"`
+	IPHash                 string         `json:"ip_hash"`
+	SDKName                string         `json:"sdk_name"`
+	SDKVersion             string         `json:"sdk_version"`
+	Properties             map[string]any `json:"properties"`
+	Context                map[string]any `json:"context"`
 }

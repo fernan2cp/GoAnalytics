@@ -93,6 +93,39 @@ func TestDecodeIngestRequestAcceptsBatchWithUnknownFields(t *testing.T) {
 	}
 }
 
+func TestDecodeIngestRequestPreservesIdempotencyAndSequenceFields(t *testing.T) {
+	body := `{
+		"events":[{
+			"event_id":"evt_1",
+			"logical_event_id":"logical_1",
+			"idempotency_key":"order_123:paid",
+			"tab_id":"tab_1",
+			"sequence":7,
+			"previous_logical_event_id":"logical_0",
+			"event_name":"purchase_completed",
+			"event_version":1,
+			"timestamp":"2026-05-06T23:59:00Z",
+			"anonymous_id":"anon",
+			"origin":"http://127.0.0.1:5173",
+			"url":"http://127.0.0.1:5173/",
+			"path":"/"
+		}]
+	}`
+	request := httptest.NewRequest("POST", "/v1/events", strings.NewReader(body))
+
+	decoded, err := decodeIngestRequest(request)
+	if err != nil {
+		t.Fatalf("decodeIngestRequest() error = %v", err)
+	}
+	event := decoded.Events[0]
+	if event.LogicalEventID != "logical_1" || event.IdempotencyKey != "order_123:paid" {
+		t.Fatalf("idempotencia = %q/%q, want logical_1/order_123:paid", event.LogicalEventID, event.IdempotencyKey)
+	}
+	if event.TabID != "tab_1" || event.Sequence != 7 || event.PreviousLogicalEventID != "logical_0" {
+		t.Fatalf("secuencia = %q/%d/%q, want tab_1/7/logical_0", event.TabID, event.Sequence, event.PreviousLogicalEventID)
+	}
+}
+
 func TestDecodeIngestRequestPreservesSiteMetadataInContext(t *testing.T) {
 	body := `{
 		"event_id":"evt_1",

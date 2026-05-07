@@ -20,39 +20,49 @@ type ingestRequestPayload struct {
 
 // ingestEventPayload representa un evento del SDK en el contrato HTTP.
 type ingestEventPayload struct {
-	EventID      string         `json:"event_id"`
-	EventName    string         `json:"event_name"`
-	EventVersion int            `json:"event_version"`
-	Timestamp    time.Time      `json:"timestamp"`
-	AnonymousID  string         `json:"anonymous_id"`
-	SessionID    string         `json:"session_id"`
-	UserID       *string        `json:"user_id"`
-	Origin       string         `json:"origin"`
-	URL          string         `json:"url"`
-	Path         string         `json:"path"`
-	Referrer     string         `json:"referrer"`
-	Properties   map[string]any `json:"properties"`
-	Context      map[string]any `json:"context"`
+	EventID                string         `json:"event_id"`
+	LogicalEventID         string         `json:"logical_event_id"`
+	IdempotencyKey         string         `json:"idempotency_key"`
+	TabID                  string         `json:"tab_id"`
+	Sequence               int64          `json:"sequence"`
+	PreviousLogicalEventID string         `json:"previous_logical_event_id"`
+	EventName              string         `json:"event_name"`
+	EventVersion           int            `json:"event_version"`
+	Timestamp              time.Time      `json:"timestamp"`
+	AnonymousID            string         `json:"anonymous_id"`
+	SessionID              string         `json:"session_id"`
+	UserID                 *string        `json:"user_id"`
+	Origin                 string         `json:"origin"`
+	URL                    string         `json:"url"`
+	Path                   string         `json:"path"`
+	Referrer               string         `json:"referrer"`
+	Properties             map[string]any `json:"properties"`
+	Context                map[string]any `json:"context"`
 }
 
 type publicEventPayload struct {
-	EventID      string         `json:"event_id"`
-	EventName    string         `json:"event_name"`
-	EventType    string         `json:"event_type"`
-	EventVersion int            `json:"event_version"`
-	Timestamp    time.Time      `json:"timestamp"`
-	AnonymousID  string         `json:"anonymous_id"`
-	SessionID    string         `json:"session_id"`
-	UserID       *string        `json:"user_id"`
-	Origin       string         `json:"origin"`
-	URL          string         `json:"url"`
-	PageURL      string         `json:"page_url"`
-	Path         string         `json:"path"`
-	Referrer     string         `json:"referrer"`
-	Properties   map[string]any `json:"properties"`
-	Metadata     map[string]any `json:"metadata"`
-	Context      map[string]any `json:"context"`
-	Extra        map[string]any `json:"-"`
+	EventID                string         `json:"event_id"`
+	LogicalEventID         string         `json:"logical_event_id"`
+	IdempotencyKey         string         `json:"idempotency_key"`
+	TabID                  string         `json:"tab_id"`
+	Sequence               int64          `json:"sequence"`
+	PreviousLogicalEventID string         `json:"previous_logical_event_id"`
+	EventName              string         `json:"event_name"`
+	EventType              string         `json:"event_type"`
+	EventVersion           int            `json:"event_version"`
+	Timestamp              time.Time      `json:"timestamp"`
+	AnonymousID            string         `json:"anonymous_id"`
+	SessionID              string         `json:"session_id"`
+	UserID                 *string        `json:"user_id"`
+	Origin                 string         `json:"origin"`
+	URL                    string         `json:"url"`
+	PageURL                string         `json:"page_url"`
+	Path                   string         `json:"path"`
+	Referrer               string         `json:"referrer"`
+	Properties             map[string]any `json:"properties"`
+	Metadata               map[string]any `json:"metadata"`
+	Context                map[string]any `json:"context"`
+	Extra                  map[string]any `json:"-"`
 }
 
 var propertyCompatibleFields = map[string]struct{}{
@@ -76,22 +86,27 @@ var contextCompatibleFields = map[string]struct{}{
 }
 
 var knownPublicEventFields = map[string]struct{}{
-	"event_id":      {},
-	"event_name":    {},
-	"event_type":    {},
-	"event_version": {},
-	"timestamp":     {},
-	"anonymous_id":  {},
-	"session_id":    {},
-	"user_id":       {},
-	"origin":        {},
-	"url":           {},
-	"page_url":      {},
-	"path":          {},
-	"referrer":      {},
-	"properties":    {},
-	"metadata":      {},
-	"context":       {},
+	"event_id":                  {},
+	"logical_event_id":          {},
+	"idempotency_key":           {},
+	"tab_id":                    {},
+	"sequence":                  {},
+	"previous_logical_event_id": {},
+	"event_name":                {},
+	"event_type":                {},
+	"event_version":             {},
+	"timestamp":                 {},
+	"anonymous_id":              {},
+	"session_id":                {},
+	"user_id":                   {},
+	"origin":                    {},
+	"url":                       {},
+	"page_url":                  {},
+	"path":                      {},
+	"referrer":                  {},
+	"properties":                {},
+	"metadata":                  {},
+	"context":                   {},
 }
 
 // decodeIngestRequest traduce el request HTTP al DTO de aplicacion.
@@ -112,19 +127,24 @@ func decodeIngestRequest(request *nethttp.Request) (dto.IngestRequest, error) {
 			origin = headerOrigin
 		}
 		events = append(events, dto.IngestEvent{
-			EventID:      item.EventID,
-			EventName:    item.EventName,
-			EventVersion: item.EventVersion,
-			Timestamp:    item.Timestamp,
-			AnonymousID:  item.AnonymousID,
-			SessionID:    item.SessionID,
-			UserID:       item.UserID,
-			Origin:       origin,
-			URL:          item.URL,
-			Path:         item.Path,
-			Referrer:     item.Referrer,
-			Properties:   item.Properties,
-			Context:      item.Context,
+			EventID:                item.EventID,
+			LogicalEventID:         item.LogicalEventID,
+			IdempotencyKey:         item.IdempotencyKey,
+			TabID:                  item.TabID,
+			Sequence:               item.Sequence,
+			PreviousLogicalEventID: item.PreviousLogicalEventID,
+			EventName:              item.EventName,
+			EventVersion:           item.EventVersion,
+			Timestamp:              item.Timestamp,
+			AnonymousID:            item.AnonymousID,
+			SessionID:              item.SessionID,
+			UserID:                 item.UserID,
+			Origin:                 origin,
+			URL:                    item.URL,
+			Path:                   item.Path,
+			Referrer:               item.Referrer,
+			Properties:             item.Properties,
+			Context:                item.Context,
 		})
 	}
 
@@ -224,19 +244,24 @@ func (payload publicEventPayload) normalize() ingestEventPayload {
 		context["site"] = mergeMaps(asMap(context["site"]), siteContext)
 	}
 	return ingestEventPayload{
-		EventID:      payload.EventID,
-		EventName:    eventName,
-		EventVersion: payload.EventVersion,
-		Timestamp:    payload.Timestamp,
-		AnonymousID:  payload.AnonymousID,
-		SessionID:    payload.SessionID,
-		UserID:       payload.UserID,
-		Origin:       payload.Origin,
-		URL:          eventURL,
-		Path:         payload.Path,
-		Referrer:     payload.Referrer,
-		Properties:   properties,
-		Context:      context,
+		EventID:                payload.EventID,
+		LogicalEventID:         payload.LogicalEventID,
+		IdempotencyKey:         payload.IdempotencyKey,
+		TabID:                  payload.TabID,
+		Sequence:               payload.Sequence,
+		PreviousLogicalEventID: payload.PreviousLogicalEventID,
+		EventName:              eventName,
+		EventVersion:           payload.EventVersion,
+		Timestamp:              payload.Timestamp,
+		AnonymousID:            payload.AnonymousID,
+		SessionID:              payload.SessionID,
+		UserID:                 payload.UserID,
+		Origin:                 payload.Origin,
+		URL:                    eventURL,
+		Path:                   payload.Path,
+		Referrer:               payload.Referrer,
+		Properties:             properties,
+		Context:                context,
 	}
 }
 

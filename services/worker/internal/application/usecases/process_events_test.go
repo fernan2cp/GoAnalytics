@@ -32,7 +32,7 @@ func TestProcessValidEventPersistsAndMarksDeduplicator(t *testing.T) {
 	if persisted.Properties == nil || persisted.Context == nil {
 		t.Fatalf("Properties y Context deben persistirse como mapas no nulos")
 	}
-	if len(deduplicator.marked) != 1 || deduplicator.marked[0] != "evt_1" {
+	if len(deduplicator.marked) != 1 || deduplicator.marked[0].Key != "evt_1" {
 		t.Fatalf("marked = %#v, want evt_1", deduplicator.marked)
 	}
 }
@@ -142,6 +142,47 @@ func TestProcessRejectsDuplicateWithoutPersistingValidEvent(t *testing.T) {
 	}
 	if len(rejectedRepository.events) != 1 || rejectedRepository.events[0].Reason != rejection.ReasonDuplicateEvent {
 		t.Fatalf("rejected = %#v, want duplicate_event", rejectedRepository.events)
+	}
+}
+
+func TestProcessRejectsDuplicateLogicalEventWithoutSemanticFallback(t *testing.T) {
+	rejectedRepository := &fakeRejectedRepository{}
+	eventRepository := &fakeEventRepository{}
+	raw := validRawEvent()
+	raw.LogicalEventID = "logical_page_1"
+	deduplicator := &fakeDeduplicator{seenByStrategy: map[string]bool{dedupStrategyLogical: true}}
+	useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, deduplicator)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 {
+		t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+	}
+	if len(rejectedRepository.events) != 1 || rejectedRepository.events[0].Reason != rejection.ReasonDuplicateLogicalEvent {
+		t.Fatalf("rejected = %#v, want duplicate_logical_event", rejectedRepository.events)
+	}
+	if rejectedRepository.events[0].RawPayload["dedup_strategy"] != dedupStrategyLogical {
+		t.Fatalf("dedup_strategy = %#v, want logical", rejectedRepository.events[0].RawPayload["dedup_strategy"])
+	}
+}
+
+func TestProcessAppliesSemanticDedupOnlyWhenNoStrongKey(t *testing.T) {
+	rejectedRepository := &fakeRejectedRepository{}
+	eventRepository := &fakeEventRepository{}
+	raw := validRawEvent()
+	deduplicator := &fakeDeduplicator{seenByStrategy: map[string]bool{dedupStrategySemantic: true}}
+	useCase := newProcessUseCaseWithPorts(time.Now(), eventRepository, rejectedRepository, &fakeSiteCache{config: cachedSite(), found: true}, &fakeSiteResolver{config: cachedSite()}, deduplicator)
+	useCase.semanticRules = []SemanticDedupRule{{EventName: "page_view", Window: 200 * time.Millisecond, Fields: []string{"session_id", "tab_id", "path"}}}
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 {
+		t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+	}
+	if len(rejectedRepository.events) != 1 || rejectedRepository.events[0].Reason != rejection.ReasonDuplicateSemanticEvent {
+		t.Fatalf("rejected = %#v, want duplicate_semantic_event", rejectedRepository.events)
 	}
 }
 
@@ -291,20 +332,23 @@ func (fake *fakeSiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 }
 
 type fakeDeduplicator struct {
-	seen   bool
-	err    error
-	marked []string
+	seen           bool
+	seenByStrategy map[string]bool
+	err            error
+	marked         []outbound.DeduplicationKey
 }
 
-func (fake *fakeDeduplicator) Seen(ctx context.Context, eventID string) (bool, error) {
+func (fake *fakeDeduplicator) Seen(ctx context.Context, key outbound.DeduplicationKey) (bool, error) {
 	_ = ctx
-	_ = eventID
+	if fake.seenByStrategy != nil {
+		return fake.seenByStrategy[key.Strategy], fake.err
+	}
 	return fake.seen, fake.err
 }
 
-func (fake *fakeDeduplicator) Mark(ctx context.Context, eventID string) error {
+func (fake *fakeDeduplicator) Mark(ctx context.Context, key outbound.DeduplicationKey) error {
 	_ = ctx
-	fake.marked = append(fake.marked, eventID)
+	fake.marked = append(fake.marked, key)
 	return fake.err
 }
 

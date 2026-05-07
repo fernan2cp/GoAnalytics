@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"goanalytics/services/ingest/internal/application/ports/inbound"
 	"goanalytics/services/ingest/internal/application/ports/outbound"
@@ -53,7 +54,7 @@ func (handler *IngestHandler) ServeHTTP(writer http.ResponseWriter, request *htt
 
 	input, err := decodeIngestRequest(request)
 	if err != nil {
-		handler.warn(request.Context(), "payload de ingesta invalido", err)
+		handler.warnWithAttrs(request.Context(), "payload de ingesta invalido", err, map[string]any{"reason": stablePayloadReason(err)})
 		http.Error(writer, "payload invalido", http.StatusBadRequest)
 		return
 	}
@@ -117,6 +118,18 @@ func (handler *IngestHandler) warn(ctx context.Context, message string, err erro
 	handler.logger.Warn(ctx, message, withRequestID(ctx, map[string]any{"error": err.Error()}))
 }
 
+// warnWithAttrs registra una advertencia con atributos auditables.
+func (handler *IngestHandler) warnWithAttrs(ctx context.Context, message string, err error, attrs map[string]any) {
+	if handler.logger == nil {
+		return
+	}
+	if attrs == nil {
+		attrs = map[string]any{}
+	}
+	attrs["error"] = err.Error()
+	handler.logger.Warn(ctx, message, withRequestID(ctx, attrs))
+}
+
 // error registra una falla asociada al request.
 func (handler *IngestHandler) error(ctx context.Context, message string, err error) {
 	if handler.logger == nil {
@@ -134,4 +147,14 @@ func withRequestID(ctx context.Context, attrs map[string]any) map[string]any {
 		attrs["request_id"] = requestID
 	}
 	return attrs
+}
+
+func stablePayloadReason(err error) string {
+	if err != nil && errors.Is(err, http.ErrBodyReadAfterClose) {
+		return "payload_too_large"
+	}
+	if err != nil && strings.Contains(err.Error(), "request body too large") {
+		return "payload_too_large"
+	}
+	return "invalid_payload"
 }

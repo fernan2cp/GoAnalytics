@@ -5,6 +5,13 @@ Este documento define las reglas base para nombrar, versionar y transportar even
 ## Identidad
 
 - `event_id` debe ser unico por evento y debe generarse antes de enviar el batch.
+- `logical_event_id` identifica el evento logico cuando el SDK puede derivarlo
+  de forma estable. Para `page_view` debe basarse en una identidad de
+  navegacion, no solo en `path`.
+- `idempotency_key` debe usarse para eventos de negocio cuando exista una clave
+  funcional confiable del dominio.
+- `tab_id` identifica una pestana dentro de la sesion y `sequence` ordena los
+  eventos emitidos desde esa pestana.
 - `event_name` debe usar `snake_case`, por ejemplo `page_view`, `product_viewed` o `checkout_started`.
 - `event_name` debe describir una accion o hecho observable, no una pantalla tecnica ni un metodo interno.
 - `event_version` empieza en `1` y aumenta cuando cambia el significado del evento o de sus propiedades principales.
@@ -33,6 +40,9 @@ Este documento define las reglas base para nombrar, versionar y transportar even
 - Las propiedades deben usar claves `snake_case`.
 - Los valores deben ser JSON simples: string, number, boolean, null, array u objeto.
 - No se deben enviar secretos, credenciales, tokens, cookies, documentos personales ni tarjetas.
+- En eventos de formularios no se deben enviar valores ingresados por el usuario.
+  Solo se permiten nombres tecnicos de campos, codigos de error y metricas
+  agregadas.
 
 ## Claves sensibles bloqueadas
 
@@ -63,6 +73,11 @@ document
 - `purchase_completed`: compra completada.
 - `signup_started`: inicio de registro.
 - `signup_completed`: registro completado.
+- `form_validation_attempt`: intento de validacion o envio de formulario.
+- `form_completed`: formulario completado.
+- `form_abandoned`: formulario abandonado.
+- `form_step_advanced`: avance de paso.
+- `form_step_viewed`: visualizacion de paso.
 
 ## Compatibilidad
 

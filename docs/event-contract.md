@@ -22,6 +22,11 @@ El microservicio es flexible en la recepción de datos. Permite enviar un array 
   "events": [
     {
       "event_id": "018f9b8e-0000-7000-a000-000000000001",
+      "logical_event_id": "page_view:sess_xyz:tab_abc:nav_123:/productos/123",
+      "idempotency_key": null,
+      "tab_id": "tab_abc",
+      "sequence": 1,
+      "previous_logical_event_id": null,
       "event_name": "page_view",
       "event_version": 1,
       "timestamp": "2026-05-05T12:00:00.000Z",
@@ -38,6 +43,12 @@ El microservicio es flexible en la recepción de datos. Permite enviar un array 
   ]
 }
 ```
+
+Los campos `logical_event_id`, `idempotency_key`, `tab_id`, `sequence` y
+`previous_logical_event_id` son opcionales y compatibles hacia atras.
+`logical_event_id` identifica un evento logico generado por el SDK.
+`idempotency_key` identifica una operacion funcional del dominio cuando existe.
+`tab_id` y `sequence` permiten reconstruir recorridos dentro de una pestana.
 
 ## Respuesta
 

@@ -17,6 +17,16 @@ analytics.track("product_viewed", {
   product_id: "123",
   category: "calzado"
 });
+
+analytics.formAttempt({
+  form_id: "checkout_address",
+  step_id: "address",
+  valid_fields: ["country"],
+  invalid_fields: ["postal_code"],
+  field_errors: { postal_code: "invalid_format" },
+  valid_count: 1,
+  error_count: 1
+});
 ```
 
 ## API
@@ -24,6 +34,11 @@ analytics.track("product_viewed", {
 - `createAnalyticsClient(options)` crea un cliente aislado del backend principal.
 - `track(eventName, properties?, options?)` encola eventos genericos.
 - `page(properties?, options?)` envia un evento `page_view` con datos de navegacion.
+- `formAttempt(payload, options?)` registra un intento de validacion o envio.
+- `formCompleted(payload, options?)` registra un formulario completado.
+- `formAbandoned(payload, options?)` registra abandono de formulario.
+- `formStepAdvanced(payload, options?)` registra avance de paso.
+- `formStepViewed(payload, options?)` registra visualizacion de paso.
 - `identify(userId)` asocia eventos futuros a un usuario conocido sin enviar secretos.
 - `flush()` fuerza el envio del batch pendiente.
 - `destroy()` detiene el timer interno y envia lo pendiente.
@@ -39,12 +54,20 @@ type AnalyticsClientOptions = {
   flushIntervalMs?: number;
   batchSize?: number;
   sessionTimeoutMs?: number;
+  maxQueueSize?: number;
+  maxPayloadBytes?: number;
   useBeacon?: boolean;
   beaconEndpoint?: string;
 };
 ```
 
-El SDK genera `event_id`, `anonymous_id` persistente y `session_id` automaticamente. Nunca firma tokens ni conoce secretos.
+El SDK genera `event_id`, `logical_event_id`, `anonymous_id` persistente,
+`session_id`, `tab_id` y `sequence` automaticamente. `tab_id` y `sequence` se
+guardan en `sessionStorage` para conservar continuidad durante la vida de la
+pestana, incluso ante refresh. Nunca firma tokens ni conoce secretos.
+
+Los helpers de formulario no aceptan valores reales ingresados por el usuario.
+Solo transportan nombres tecnicos de campos, codigos de error y conteos.
 
 ## Desarrollo e Instalación
 
