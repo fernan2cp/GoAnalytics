@@ -16,6 +16,8 @@ analytics.page();
 analytics.track("product_viewed", {
   product_id: "123",
   category: "calzado"
+}, {
+  logicalEventId: "product_viewed:123"
 });
 
 analytics.checkoutStarted({
@@ -93,6 +95,43 @@ llegan al backend, comparten `logical_event_id` e `idempotency_key`.
 funcional usa primero `checkout_id`, luego `cart_id` y finalmente
 `order_draft_id`. Si no recibe ninguno de esos campos, el evento se envia con la
 politica generica y el backend puede aplicar su fallback semantico.
+
+Para eventos personalizados que puedan dispararse mas de una vez por la misma
+accion logica, pasar `logicalEventId` en las opciones. Esto es especialmente
+importante en eventos emitidos desde `useEffect`, handlers con reintentos o
+componentes que pueden montarse dos veces en desarrollo por React StrictMode.
+
+Ejemplos recomendados:
+
+```ts
+analytics.track("product_viewed", {
+  item_id: item.id.toString(),
+  item_name: item.name,
+  price: price.value,
+}, {
+  logicalEventId: `product_viewed:${item.id}:${window.location.pathname}`,
+});
+
+analytics.track("cart_item_added", {
+  item_id: item.id.toString(),
+  quantity,
+}, {
+  logicalEventId: `cart_item_added:${cartId}:${item.id}`,
+});
+```
+
+Para inicio de checkout, preferir el helper dedicado:
+
+```ts
+analytics.checkoutStarted({
+  cart_id: cartId,
+  value: total,
+  items_count: items.length,
+});
+```
+
+Si se usa `track("checkout_started", ...)` directamente, pasar
+`logicalEventId` basado en `checkout_id`, `cart_id` u `order_draft_id`.
 
 Los helpers de formulario no aceptan valores reales ingresados por el usuario.
 Solo transportan nombres tecnicos de campos, codigos de error y conteos.

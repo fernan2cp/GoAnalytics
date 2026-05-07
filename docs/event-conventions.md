@@ -10,6 +10,11 @@ Este documento define las reglas base para nombrar, versionar y transportar even
   navegacion, no solo en `path`.
 - `idempotency_key` debe usarse para eventos de negocio cuando exista una clave
   funcional confiable del dominio.
+- En eventos personalizados emitidos con `track`, el consumidor debe pasar
+  `logicalEventId` cuando pueda derivar una identidad funcional estable. Esto
+  evita duplicados por doble montaje, React StrictMode, reintentos o doble
+  handler. Ejemplos: `product_viewed:{item_id}:{path}`,
+  `cart_item_added:{cart_id}:{item_id}` o `checkout_started:{cart_id}`.
 - `tab_id` identifica una pestana dentro de la sesion y `sequence` ordena los
   eventos emitidos desde esa pestana.
 - `event_name` debe usar `snake_case`, por ejemplo `page_view`, `product_viewed` o `checkout_started`.

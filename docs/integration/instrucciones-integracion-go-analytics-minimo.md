@@ -123,6 +123,37 @@ Ejemplo:
 analytics.track("product_viewed", {
   product_id: "123",
   category: "calzado",
+}, {
+  logicalEventId: "product_viewed:123",
+});
+```
+
+Recomendacion de idempotencia para eventos personalizados:
+
+Cuando un evento personalizado representa una accion logica que puede
+ejecutarse dos veces por montaje de componentes, React StrictMode, reintentos o
+doble handler, se debe pasar `logicalEventId`. El SDK usa ese valor como base
+para generar `idempotency_key`; asi, dos intentos tecnicos del mismo evento
+logico llegan con la misma clave de deduplicacion.
+
+Ejemplos:
+
+```ts
+analytics.track("product_viewed", {
+  item_id: item.id.toString(),
+  item_name: item.name,
+  price,
+}, {
+  logicalEventId: `product_viewed:${item.id}:${location.pathname}`,
+});
+```
+
+```ts
+analytics.track("cart_item_added", {
+  item_id: item.id.toString(),
+  quantity,
+}, {
+  logicalEventId: `cart_item_added:${cartId}:${item.id}`,
 });
 ```
 
@@ -139,6 +170,17 @@ analytics.track("button_clicked", {
 analytics.track("checkout_started", {
   cart_id: cartId,
   total_items: items.length,
+}, {
+  logicalEventId: `checkout_started:${cartId}`,
+});
+```
+
+Para `checkout_started`, si el SDK instalado expone `checkoutStarted`, preferir:
+
+```ts
+analytics.checkoutStarted({
+  cart_id: cartId,
+  items_count: items.length,
 });
 ```
 
