@@ -10,6 +10,8 @@ export type AnalyticsClientOptions = {
   sessionTimeoutMs?: number;
   maxQueueSize?: number;
   maxPayloadBytes?: number;
+  maxFailures?: number;
+  circuitOpenMs?: number;
   useBeacon?: boolean;
   beaconEndpoint?: string;
 };
@@ -130,6 +132,8 @@ const DEFAULT_BATCH_SIZE = 10;
 const DEFAULT_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_MAX_QUEUE_SIZE = 100;
 const DEFAULT_MAX_PAYLOAD_BYTES = 64 * 1024;
+const DEFAULT_MAX_FAILURES = 5;
+const DEFAULT_CIRCUIT_OPEN_MS = 60_000;
 const PAGE_VIEW_DEDUPLICATION_WINDOW_MS = 1000;
 const ANONYMOUS_ID_KEY = "goanalytics:anonymous_id";
 const SESSION_KEY = "goanalytics:session";
@@ -148,6 +152,10 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   let userId: string | null = null;
   let queue: AnalyticsEventPayload[] = [];
   let flushInFlight: Promise<void> | null = null;
+  let consecutiveFailures = 0;
+  let circuitOpenedAt: number | null = null;
+  let circuitWarned = false;
+  let clientRejectionWarned = false;
   const tabId = currentTabId(tabStorage);
   let sequence = currentSequence(tabStorage);
   let previousLogicalEventId = tabStorage.get(PREVIOUS_LOGICAL_EVENT_ID_KEY) ?? "";
@@ -268,6 +276,9 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
     if (queue.length === 0) {
       return;
     }
+    if (isCircuitOpen()) {
+      return;
+    }
 
     flushInFlight = flushQueuedBatches()
       .finally(() => {
@@ -284,13 +295,50 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
 
       try {
         await sendBatch(config, batch);
+        closeCircuit();
       } catch (error) {
         if (isPayloadTooLargeError(error)) {
           continue;
         }
+        if (isClientRejectionError(error)) {
+          warnClientRejection(error);
+          continue;
+        }
         queue = batch.concat(queue).slice(0, config.maxQueueSize);
+        registerServiceFailure();
         return;
       }
+    }
+  }
+
+  function isCircuitOpen(): boolean {
+    return circuitOpenedAt !== null && Date.now() - circuitOpenedAt < config.circuitOpenMs;
+  }
+
+  function registerServiceFailure(): void {
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= config.maxFailures) {
+      openCircuit();
+    }
+  }
+
+  function openCircuit(): void {
+    circuitOpenedAt = Date.now();
+    if (!circuitWarned) {
+      circuitWarned = true;
+      console.warn("Go Analytics pauso temporalmente el envio de eventos porque el servicio de ingesta no responde.");
+    }
+  }
+
+  function closeCircuit(): void {
+    consecutiveFailures = 0;
+    circuitOpenedAt = null;
+  }
+
+  function warnClientRejection(error: ClientRejectionError): void {
+    if (!clientRejectionWarned) {
+      clientRejectionWarned = true;
+      console.warn(`Go Analytics descarto un batch rechazado por ingesta con estado ${error.status}.`);
     }
   }
 
@@ -314,7 +362,7 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
   };
 }
 
-function normalizeOptions(options: AnalyticsClientOptions): Required<Pick<AnalyticsClientOptions, "token" | "endpoint" | "flushIntervalMs" | "batchSize" | "sessionTimeoutMs" | "maxQueueSize" | "maxPayloadBytes" | "useBeacon">> & Pick<AnalyticsClientOptions, "beaconEndpoint"> {
+function normalizeOptions(options: AnalyticsClientOptions): Required<Pick<AnalyticsClientOptions, "token" | "endpoint" | "flushIntervalMs" | "batchSize" | "sessionTimeoutMs" | "maxQueueSize" | "maxPayloadBytes" | "maxFailures" | "circuitOpenMs" | "useBeacon">> & Pick<AnalyticsClientOptions, "beaconEndpoint"> {
   if (!options.token || !options.token.trim()) {
     throw new Error("Go Analytics requiere un token de tracking.");
   }
@@ -330,6 +378,8 @@ function normalizeOptions(options: AnalyticsClientOptions): Required<Pick<Analyt
     sessionTimeoutMs: positiveNumber(options.sessionTimeoutMs, DEFAULT_SESSION_TIMEOUT_MS),
     maxQueueSize: positiveNumber(options.maxQueueSize, DEFAULT_MAX_QUEUE_SIZE),
     maxPayloadBytes: positiveNumber(options.maxPayloadBytes, DEFAULT_MAX_PAYLOAD_BYTES),
+    maxFailures: positiveNumber(options.maxFailures, DEFAULT_MAX_FAILURES),
+    circuitOpenMs: positiveNumber(options.circuitOpenMs, DEFAULT_CIRCUIT_OPEN_MS),
     useBeacon: options.useBeacon ?? true,
     beaconEndpoint: options.beaconEndpoint
   };
@@ -386,12 +436,31 @@ async function sendBatch(config: ReturnType<typeof normalizeOptions>, events: An
   });
 
   if (!response.ok) {
-    throw new Error(`Go Analytics rechazo el batch con estado ${response.status}.`);
+    if (response.status >= 400 && response.status < 500) {
+      throw new ClientRejectionError(response.status);
+    }
+    throw new ServiceUnavailableError(response.status);
+  }
+}
+
+class ClientRejectionError extends Error {
+  constructor(readonly status: number) {
+    super(`Go Analytics rechazo el batch con estado ${status}.`);
+  }
+}
+
+class ServiceUnavailableError extends Error {
+  constructor(readonly status: number) {
+    super(`Go Analytics no pudo enviar el batch por estado ${status}.`);
   }
 }
 
 function isPayloadTooLargeError(error: unknown): boolean {
   return error instanceof Error && error.message === "payload_too_large";
+}
+
+function isClientRejectionError(error: unknown): error is ClientRejectionError {
+  return error instanceof ClientRejectionError;
 }
 
 function trySendBeacon(endpoint: string, body: string): boolean {

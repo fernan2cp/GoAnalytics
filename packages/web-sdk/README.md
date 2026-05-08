@@ -66,10 +66,29 @@ type AnalyticsClientOptions = {
   sessionTimeoutMs?: number;
   maxQueueSize?: number;
   maxPayloadBytes?: number;
+  maxFailures?: number;
+  circuitOpenMs?: number;
   useBeacon?: boolean;
   beaconEndpoint?: string;
 };
 ```
+
+`maxFailures` define cuantos fallos consecutivos de red o respuestas `5xx`
+tolera el SDK antes de abrir el circuito. Por defecto usa `5`. `circuitOpenMs`
+define cuanto tiempo queda pausado el envio antes de probar recuperacion; por
+defecto usa `60000` ms.
+
+Cuando el circuito esta abierto, `flush()` no realiza requests y los eventos
+nuevos siguen entrando a la cola hasta `maxQueueSize`, respetando la politica
+existente de eventos criticos. Al terminar el cooldown, el SDK permite un envio
+de prueba: si funciona, resetea el contador y vuelve a operar normalmente; si
+falla, pausa otro intervalo.
+
+Los errores `4xx` de ingesta se consideran rechazos no recuperables para ese
+batch y no se reintentan indefinidamente. Los fallos de red, timeouts del
+navegador, `ERR_CONNECTION_REFUSED` y respuestas `5xx` cuentan para abrir el
+circuito. Esto evita saturar la consola, la pestana Network y la aplicacion host
+cuando el microservicio de ingesta esta caido.
 
 El SDK genera `event_id`, `logical_event_id`, `idempotency_key`, `anonymous_id`
 persistente, `session_id`, `tab_id` y `sequence` automaticamente. `event_id`
