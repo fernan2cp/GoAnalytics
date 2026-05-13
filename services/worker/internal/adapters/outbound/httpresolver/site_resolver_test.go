@@ -32,7 +32,7 @@ func TestSiteResolverAcceptsMinimalSiteContract(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resolver, err := NewSiteResolver(server.URL, "", time.Second, nil, nil)
+	resolver, err := NewSiteResolver(server.URL, "", time.Second, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("NewSiteResolver() error = %v", err)
 	}

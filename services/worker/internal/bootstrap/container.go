@@ -73,6 +73,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		config.SiteResolverTimeout,
 		rehydrationGate,
 		siteCache,
+		appLogger,
 	)
 	if err != nil {
 		return nil, err

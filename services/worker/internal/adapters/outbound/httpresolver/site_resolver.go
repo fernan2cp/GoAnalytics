@@ -38,6 +38,7 @@ type SiteResolver struct {
 	client    *http.Client
 	gate      *redisadapter.RehydrationGate
 	siteCache *redisadapter.SiteCache
+	logger    outbound.Logger
 }
 
 // NewSiteResolver crea un resolver HTTP de metadata de site.
@@ -51,6 +52,7 @@ func NewSiteResolver(
 	timeout time.Duration,
 	gate *redisadapter.RehydrationGate,
 	siteCache *redisadapter.SiteCache,
+	logger outbound.Logger,
 ) (*SiteResolver, error) {
 	if strings.TrimSpace(url) == "" {
 		return nil, ErrResolverURLRequired
@@ -61,6 +63,7 @@ func NewSiteResolver(
 		client:    &http.Client{Timeout: timeout},
 		gate:      gate,
 		siteCache: siteCache,
+		logger:    logger,
 	}, nil
 }
 
@@ -98,17 +101,50 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 		req.Header.Set("Authorization", "Bearer "+resolver.token)
 	}
 
+	if resolver.logger != nil {
+		resolver.logger.Info(ctx, "resolving site metadata", map[string]any{
+			"site_code": input.SiteCode,
+			"url":       resolver.url,
+			"payload":   string(body),
+		})
+	}
+
+	start := time.Now()
 	resp, err := resolver.client.Do(req)
+	duration := time.Since(start)
+
 	if err != nil {
+		if resolver.logger != nil {
+			resolver.logger.Error(ctx, "site resolver request failed", map[string]any{
+				"site_code": input.SiteCode,
+				"url":       resolver.url,
+				"error":     err.Error(),
+				"duration":  duration.String(),
+			})
+		}
 		return site.SiteConfig{}, err
 	}
 	defer resp.Body.Close()
+
+	if resolver.logger != nil {
+		resolver.logger.Info(ctx, "site resolver response received", map[string]any{
+			"site_code":   input.SiteCode,
+			"status_code": resp.StatusCode,
+			"duration":    duration.String(),
+		})
+	}
 
 	if resp.StatusCode == http.StatusNotFound {
 		_ = resolver.markNotFound(ctx, input.SiteCode)
 		return site.SiteConfig{}, ErrSiteNotFound
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		if resolver.logger != nil {
+			resolver.logger.Error(ctx, "site resolver rejected request", map[string]any{
+				"site_code":   input.SiteCode,
+				"status_code": resp.StatusCode,
+			})
+		}
 		return site.SiteConfig{}, fmt.Errorf("%w: status %d", ErrResolverRejected, resp.StatusCode)
 	}
 
@@ -117,11 +153,25 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 		return site.SiteConfig{}, err
 	}
 	if payload.Error != "" {
+		if resolver.logger != nil {
+			resolver.logger.Warn(ctx, "site resolver backend error", map[string]any{
+				"site_code": input.SiteCode,
+				"error":     payload.Error,
+			})
+		}
 		if payload.Error == "site_not_found" {
 			_ = resolver.markNotFound(ctx, input.SiteCode)
 			return site.SiteConfig{}, ErrSiteNotFound
 		}
 		return site.SiteConfig{}, fmt.Errorf("%w: %s", ErrResolverRejected, payload.Error)
+	}
+
+	if resolver.logger != nil {
+		resolver.logger.Info(ctx, "site metadata resolved", map[string]any{
+			"site_code": input.SiteCode,
+			"tenant_id": payload.TenantID,
+			"site_id":   payload.SiteID,
+		})
 	}
 	return payload.toDomain(input), nil
 }
