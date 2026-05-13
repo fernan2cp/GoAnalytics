@@ -11,6 +11,7 @@ coverage.out
 node_modules/
 dist/
 .turbo/
+*.tgz
 
 # Env and local data
 .env
@@ -29,3 +30,4 @@ data/
 .aider*
 .windsurf/
 AGENTS.local.md
+
