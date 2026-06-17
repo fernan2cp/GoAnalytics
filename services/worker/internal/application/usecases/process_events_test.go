@@ -76,6 +76,72 @@ func TestProcessValidItemEventBuildsNormalizedDetails(t *testing.T) {
 	}
 }
 
+func TestProcessMarksItemImpressionDedupKeyAfterPersistence(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	eventRepository := &fakeEventRepository{}
+	deduplicator := &fakeDeduplicator{}
+	useCase := newTestProcessUseCase(now, eventRepository, &fakeRejectedRepository{}, cachedSite(), nil, deduplicator)
+	raw := validItemImpressionEvent()
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 1 {
+		t.Fatalf("valid events = %d, want 1", len(eventRepository.events))
+	}
+	if !deduplicator.wasMarked(dedupStrategyItemImpression, "tenant_123:site_456:sess_xyz:catalog:list_1:100:") {
+		t.Fatalf("marked = %#v, want item_impression key", deduplicator.marked)
+	}
+}
+
+func TestProcessRejectsDuplicateItemImpressionBySpecificKey(t *testing.T) {
+	rejectedRepository := &fakeRejectedRepository{}
+	eventRepository := &fakeEventRepository{}
+	deduplicator := &fakeDeduplicator{seenByStrategy: map[string]bool{dedupStrategyItemImpression: true}}
+	useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, deduplicator)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{validItemImpressionEvent()}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 {
+		t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+	}
+	if len(rejectedRepository.events) != 1 {
+		t.Fatalf("rejected events = %d, want 1", len(rejectedRepository.events))
+	}
+	rejected := rejectedRepository.events[0]
+	if rejected.Reason != rejection.ReasonDuplicateSemanticEvent {
+		t.Fatalf("Reason = %q, want %q", rejected.Reason, rejection.ReasonDuplicateSemanticEvent)
+	}
+	if rejected.RawPayload["dedup_strategy"] != dedupStrategyItemImpression {
+		t.Fatalf("dedup_strategy = %#v, want item_impression", rejected.RawPayload["dedup_strategy"])
+	}
+}
+
+func TestProcessRejectsDuplicatePurchaseLineBySpecificKey(t *testing.T) {
+	rejectedRepository := &fakeRejectedRepository{}
+	eventRepository := &fakeEventRepository{}
+	deduplicator := &fakeDeduplicator{seenByStrategy: map[string]bool{dedupStrategyPurchaseLine: true}}
+	useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, deduplicator)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{validPurchaseCompletedEvent()}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 {
+		t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+	}
+	if len(rejectedRepository.events) != 1 {
+		t.Fatalf("rejected events = %d, want 1", len(rejectedRepository.events))
+	}
+	rejected := rejectedRepository.events[0]
+	if rejected.Reason != rejection.ReasonDuplicateSemanticEvent {
+		t.Fatalf("Reason = %q, want %q", rejected.Reason, rejection.ReasonDuplicateSemanticEvent)
+	}
+	if rejected.RawPayload["dedup_strategy"] != dedupStrategyPurchaseLine {
+		t.Fatalf("dedup_strategy = %#v, want purchase_line", rejected.RawPayload["dedup_strategy"])
+	}
+}
+
 func TestProcessCacheMissRehydratesAndCachesSite(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	cache := &fakeSiteCache{found: false}
@@ -299,6 +365,46 @@ func validRawEvent() dto.RawEvent {
 	}
 }
 
+func validItemImpressionEvent() dto.RawEvent {
+	raw := validRawEvent()
+	raw.EventName = "item_impression"
+	raw.Properties = map[string]any{
+		"item_id":             "100",
+		"surface":             "catalog",
+		"list_instance_id":    "list_1",
+		"impression_batch_id": "batch_1",
+		"visible_ratio":       float64(75),
+		"visible_time_ms":     float64(1500),
+		"viewport_width":      float64(1366),
+		"viewport_height":     float64(768),
+		"ranking_run_id":      "rank_1",
+		"ranking_version":     "v1",
+		"item_type":           "product",
+		"category_ids":        []any{"cat_1"},
+	}
+	return raw
+}
+
+func validPurchaseCompletedEvent() dto.RawEvent {
+	raw := validRawEvent()
+	raw.EventName = "purchase_completed"
+	raw.Properties = map[string]any{
+		"order_id": "ord_1",
+		"currency": "ARS",
+		"items": []any{
+			map[string]any{
+				"item_id":       "100",
+				"order_line_id": "line_1",
+				"quantity":      float64(2),
+				"unit_price":    float64(50),
+				"currency":      "ARS",
+				"item_type":     "product",
+			},
+		},
+	}
+	return raw
+}
+
 func cachedSite() site.SiteConfig {
 	return site.SiteConfig{
 		SiteCode:        "pub_site_abc123",
@@ -389,6 +495,15 @@ func (fake *fakeDeduplicator) Mark(ctx context.Context, key outbound.Deduplicati
 	_ = ctx
 	fake.marked = append(fake.marked, key)
 	return fake.err
+}
+
+func (fake *fakeDeduplicator) wasMarked(strategy string, key string) bool {
+	for _, marked := range fake.marked {
+		if marked.Strategy == strategy && marked.Key == key {
+			return true
+		}
+	}
+	return false
 }
 
 type fakeClock struct {

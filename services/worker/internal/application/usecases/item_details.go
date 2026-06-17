@@ -69,7 +69,11 @@ func extractItemPayloads(properties map[string]any) []map[string]any {
 		return nil
 	}
 	if items := itemListValue(properties["items"]); len(items) > 0 {
-		return items
+		merged := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			merged = append(merged, mergeDetailMaps(properties, item))
+		}
+		return merged
 	}
 	if item := mapValue(properties, "item"); item != nil {
 		return []map[string]any{mergeDetailMaps(properties, item)}

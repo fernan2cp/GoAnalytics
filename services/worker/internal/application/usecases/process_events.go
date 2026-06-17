@@ -165,6 +165,14 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		validEvent := buildValidatedEvent(raw, config, dedupStrategy)
 		validEvent.ItemDetails = buildItemDetails(validEvent)
 		validEvent.OrderDetail = buildOrderDetail(validEvent)
+		itemDedupStrategy, itemDuplicateReason, err := uc.evaluateItemSpecificDedup(ctx, validEvent)
+		if err != nil {
+			return err
+		}
+		if itemDuplicateReason != "" {
+			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, itemDuplicateReason, rejection.SeverityWarning, itemDedupStrategy))
+			continue
+		}
 		validEvents = append(validEvents, validEvent)
 	}
 
@@ -329,6 +337,21 @@ func (uc *ProcessEventsUseCase) evaluateStrongAndSemanticDedup(ctx context.Conte
 	return semantic.Strategy, "", nil
 }
 
+// evaluateItemSpecificDedup aplica deduplicacion especializada por detalle de item.
+func (uc *ProcessEventsUseCase) evaluateItemSpecificDedup(ctx context.Context, valid event.ValidatedEvent) (string, string, error) {
+	keys := itemSpecificDedupKeys(valid)
+	for _, key := range keys {
+		seen, err := uc.deduplicator.Seen(ctx, key)
+		if err != nil {
+			return "", "", fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+		}
+		if seen {
+			return key.Strategy, rejection.ReasonDuplicateSemanticEvent, nil
+		}
+	}
+	return "", "", nil
+}
+
 // markDeduplicationKeys registra las claves vistas despues de persistir.
 func (uc *ProcessEventsUseCase) markDeduplicationKeys(ctx context.Context, valid event.ValidatedEvent) error {
 	keys := []outbound.DeduplicationKey{
@@ -357,6 +380,7 @@ func (uc *ProcessEventsUseCase) markDeduplicationKeys(ctx context.Context, valid
 			keys = append(keys, semantic.Key)
 		}
 	}
+	keys = append(keys, itemSpecificDedupKeys(valid)...)
 	for _, key := range keys {
 		if err := uc.deduplicator.Mark(ctx, key); err != nil {
 			return err

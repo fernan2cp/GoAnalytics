@@ -9,15 +9,18 @@ import (
 
 	"goanalytics/services/worker/internal/application/dto"
 	"goanalytics/services/worker/internal/application/ports/outbound"
+	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/site"
 )
 
 const (
-	dedupStrategyExact       = "exact"
-	dedupStrategyLogical     = "logical"
-	dedupStrategyIdempotency = "idempotency"
-	dedupStrategySemantic    = "semantic"
-	dedupStrategyNone        = "none"
+	dedupStrategyExact          = "exact"
+	dedupStrategyLogical        = "logical"
+	dedupStrategyIdempotency    = "idempotency"
+	dedupStrategySemantic       = "semantic"
+	dedupStrategyItemImpression = "item_impression"
+	dedupStrategyPurchaseLine   = "purchase_line"
+	dedupStrategyNone           = "none"
 )
 
 // SemanticDedupRule define una regla explicita de deduplicacion semantica.
@@ -130,4 +133,56 @@ func semanticFieldValue(field string, raw dto.RawEvent, config site.SiteConfig) 
 	default:
 		return ""
 	}
+}
+
+// itemSpecificDedupKeys arma claves de deduplicacion basadas en detalles de item.
+func itemSpecificDedupKeys(valid event.ValidatedEvent) []outbound.DeduplicationKey {
+	switch strings.TrimSpace(valid.EventName) {
+	case "item_impression":
+		return itemImpressionDedupKeys(valid)
+	case "purchase_completed":
+		return purchaseLineDedupKeys(valid)
+	default:
+		return nil
+	}
+}
+
+func itemImpressionDedupKeys(valid event.ValidatedEvent) []outbound.DeduplicationKey {
+	keys := make([]outbound.DeduplicationKey, 0, len(valid.ItemDetails))
+	for _, detail := range valid.ItemDetails {
+		if strings.TrimSpace(detail.ItemID) == "" ||
+			strings.TrimSpace(detail.Surface) == "" ||
+			strings.TrimSpace(detail.ListInstanceID) == "" ||
+			strings.TrimSpace(detail.SessionID) == "" {
+			continue
+		}
+		key := strings.Join([]string{
+			detail.TenantID,
+			detail.SiteID,
+			detail.SessionID,
+			detail.Surface,
+			detail.ListInstanceID,
+			detail.ItemID,
+			detail.VariantID,
+		}, ":")
+		keys = append(keys, outbound.DeduplicationKey{Strategy: dedupStrategyItemImpression, Key: key})
+	}
+	return keys
+}
+
+func purchaseLineDedupKeys(valid event.ValidatedEvent) []outbound.DeduplicationKey {
+	keys := make([]outbound.DeduplicationKey, 0, len(valid.ItemDetails))
+	for _, detail := range valid.ItemDetails {
+		if strings.TrimSpace(detail.OrderID) == "" || strings.TrimSpace(detail.OrderLineID) == "" {
+			continue
+		}
+		key := strings.Join([]string{
+			detail.TenantID,
+			detail.SiteID,
+			detail.OrderID,
+			detail.OrderLineID,
+		}, ":")
+		keys = append(keys, outbound.DeduplicationKey{Strategy: dedupStrategyPurchaseLine, Key: key})
+	}
+	return keys
 }
