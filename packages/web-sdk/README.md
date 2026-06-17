@@ -115,45 +115,133 @@ funcional usa primero `checkout_id`, luego `cart_id` y finalmente
 `order_draft_id`. Si no recibe ninguno de esos campos, el evento se envia con la
 politica generica y el backend puede aplicar su fallback semantico.
 
-Para eventos personalizados que puedan dispararse mas de una vez por la misma
-accion logica, pasar `logicalEventId` en las opciones. Esto es especialmente
-importante en eventos emitidos desde `useEffect`, handlers con reintentos o
-componentes que pueden montarse dos veces en desarrollo por React StrictMode.
+Para eventos que involucran ítems o productos, el SDK permite enviar los datos en las propiedades del evento (`properties`). Esto soporta tanto el flujo de un solo ítem (pasando los campos directamente en el objeto de propiedades) como el flujo de múltiples ítems (enviando un arreglo `items`).
 
-Ejemplos recomendados:
+### Eventos de Ítems Soportados
 
+| Evento | Propósito | Payload Recomendado |
+|---|---|---|
+| `item_impression` | Ítem visible realmente en pantalla. | Campos de visibilidad (`visible_ratio`, `visible_time_ms`), `item_id`, `surface`, `list_instance_id`. |
+| `item_viewed` | Visualización del detalle del ítem. | `item_id`, `variant_id` (opcional), `sku` (opcional). |
+| `item_image_zoomed`| Zoom de imagen del ítem. | `item_id`, `variant_id` (si aplica a la imagen). |
+| `cart_item_added` | Ítem agregado al carrito. | `item_id`, `quantity`, `unit_price`, `currency`, `cart_id`. |
+| `checkout_started` | Inicio de proceso de pago. | Lista de `items` (cada uno con `item_id`, `quantity`, etc.) y `checkout_id`. |
+| `purchase_completed`| Compra confirmada. | Lista de `items` (cada uno con `item_id`, `order_line_id`, `quantity`) y `order_id`. |
+
+### Regla Estricta para `item_impression`
+
+Para evitar sesgos y asegurar un cálculo de scoring confiable en el backend, no debes emitir `item_impression` por render técnico, pre-cargas o skeletons. Solo debe emitirse cuando el ítem sea visible realmente:
+- El ítem tiene al menos un **50% de visibilidad** en el viewport (`visible_ratio >= 0.5`).
+- El tiempo visible acumulado es de al menos **1000 ms** (`visible_time_ms >= 1000`).
+- La pestaña está activa (`document.visibilityState === "visible"`).
+
+### Ejemplos de Implementación
+
+#### 1. Registrar una Impresión Real (`item_impression`)
 ```ts
-analytics.track("product_viewed", {
-  item_id: item.id.toString(),
-  item_name: item.name,
-  price: price.value,
+analytics.track("item_impression", {
+  item_id: "prod_987",
+  variant_id: "var_blue_large",
+  sku: "SKU-987-BL",
+  item_type: "product",
+  surface: "search_results",
+  position: 3,
+  page: 1,
+  list_instance_id: "list_search_results_abc",
+  impression_batch_id: "batch_xyz",
+  visible_ratio: 0.85,
+  visible_time_ms: 1200,
+  viewport_width: 1920,
+  viewport_height: 1080,
+  rendered_at: new Date().toISOString()
 }, {
-  logicalEventId: `product_viewed:${item.id}:${window.location.pathname}`,
-});
-
-analytics.track("cart_item_added", {
-  item_id: item.id.toString(),
-  quantity,
-}, {
-  logicalEventId: `cart_item_added:${cartId}:${item.id}`,
+  // logicalEventId específico para deduplicación semántica de impresiones
+  logicalEventId: `item_impression:session_123:search_results:prod_987:var_blue_large`
 });
 ```
 
-Para inicio de checkout, preferir el helper dedicado:
+#### 2. Registrar Vista de Detalle (`item_viewed`)
+```ts
+analytics.track("item_viewed", {
+  item_id: "prod_987",
+  variant_id: "var_blue_large",
+  sku: "SKU-987-BL",
+  item_type: "product",
+  surface: "product_detail",
+  category_ids: ["category_shoes", "category_running"]
+}, {
+  logicalEventId: `item_viewed:prod_987:var_blue_large`
+});
+```
 
+#### 3. Agregar al Carrito (`cart_item_added`)
+```ts
+analytics.track("cart_item_added", {
+  cart_id: "cart_abc123",
+  item_id: "prod_987",
+  variant_id: "var_blue_large",
+  sku: "SKU-987-BL",
+  quantity: 2,
+  unit_price: 4500.00,
+  currency: "ARS"
+}, {
+  logicalEventId: `cart_item_added:cart_abc123:prod_987:var_blue_large`
+});
+```
+
+#### 4. Inicio de Checkout (Helper Dedicado)
+Para registrar el inicio del checkout con múltiples ítems, utiliza el helper `checkoutStarted` pasando la estructura con el arreglo `items`:
 ```ts
 analytics.checkoutStarted({
-  cart_id: cartId,
-  value: total,
-  items_count: items.length,
+  checkout_id: "check_555",
+  cart_id: "cart_abc123",
+  value: 9000.00,
+  currency: "ARS",
+  items_count: 2,
+  items: [
+    {
+      item_id: "prod_987",
+      variant_id: "var_blue_large",
+      sku: "SKU-987-BL",
+      quantity: 2,
+      unit_price: 4500.00,
+      currency: "ARS"
+    }
+  ]
 });
 ```
 
-Si se usa `track("checkout_started", ...)` directamente, pasar
-`logicalEventId` basado en `checkout_id`, `cart_id` u `order_draft_id`.
+#### 5. Compra Completada (`purchase_completed` - Multi-ítem)
+Para asegurar que el scoring reciba datos de compras auditables, es requerido incluir el identificador de orden (`order_id`) y la línea de la orden (`order_line_id`) de cada ítem:
+```ts
+analytics.track("purchase_completed", {
+  order_id: "order_xyz789",
+  currency: "ARS",
+  gross_amount: 9000.00,
+  net_amount: 8500.00,
+  discount_amount: 500.00,
+  items: [
+    {
+      item_id: "prod_987",
+      variant_id: "var_blue_large",
+      sku: "SKU-987-BL",
+      order_line_id: "line_0",
+      quantity: 2,
+      unit_price: 4500.00,
+      gross_amount: 9000.00,
+      discount_amount: 500.00
+    }
+  ]
+}, {
+  logicalEventId: `purchase_completed:order_xyz789`
+});
+```
 
-Los helpers de formulario no aceptan valores reales ingresados por el usuario.
-Solo transportan nombres tecnicos de campos, codigos de error y conteos.
+### Notas sobre Deduplicación e Idempotencia
+
+Para eventos personalizados o disparados desde componentes que pueden montarse más de una vez (ej. `useEffect` en React StrictMode), es altamente recomendable pasar el `logicalEventId` de forma manual en las opciones. Esto evita que se generen duplicados técnicos en la base de datos de analítica.
+
+Los helpers de formulario no aceptan valores reales ingresados por el usuario. Solo transportan nombres técnicos de campos, códigos de error y conteos.
 
 ## Desarrollo e Instalación
 
