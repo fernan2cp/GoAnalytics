@@ -42,4 +42,6 @@ type ValidatedEvent struct {
 	TokenVersion           int
 	Properties             map[string]any
 	Context                map[string]any
+	ItemDetails            []ItemDetail
+	OrderDetail            *OrderDetail
 }

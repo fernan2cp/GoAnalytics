@@ -162,7 +162,10 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			rejectedEvents = append(rejectedEvents, uc.buildRejectedEvent(raw, duplicateReason, rejection.SeverityWarning, dedupStrategy))
 			continue
 		}
-		validEvents = append(validEvents, buildValidatedEvent(raw, config, dedupStrategy))
+		validEvent := buildValidatedEvent(raw, config, dedupStrategy)
+		validEvent.ItemDetails = buildItemDetails(validEvent)
+		validEvent.OrderDetail = buildOrderDetail(validEvent)
+		validEvents = append(validEvents, validEvent)
 	}
 
 	if len(rejectedEvents) > 0 {

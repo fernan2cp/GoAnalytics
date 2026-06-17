@@ -37,6 +37,45 @@ func TestProcessValidEventPersistsAndMarksDeduplicator(t *testing.T) {
 	}
 }
 
+func TestProcessValidItemEventBuildsNormalizedDetails(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	eventRepository := &fakeEventRepository{}
+	useCase := newTestProcessUseCase(now, eventRepository, &fakeRejectedRepository{}, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.EventName = "item_impression"
+	raw.Properties = map[string]any{
+		"item_id":             "100",
+		"surface":             "catalog",
+		"list_instance_id":    "list_1",
+		"impression_batch_id": "batch_1",
+		"visible_ratio":       float64(75),
+		"visible_time_ms":     float64(1500),
+		"viewport_width":      float64(1366),
+		"viewport_height":     float64(768),
+		"ranking_run_id":      "rank_1",
+		"ranking_version":     "v1",
+		"item_type":           "product",
+		"category_ids":        []any{"cat_1"},
+	}
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 1 {
+		t.Fatalf("valid events = %d, want 1", len(eventRepository.events))
+	}
+	details := eventRepository.events[0].ItemDetails
+	if len(details) != 1 {
+		t.Fatalf("ItemDetails = %d, want 1", len(details))
+	}
+	if details[0].TenantID != "tenant_123" || details[0].ItemID != "100" || details[0].Surface != "catalog" {
+		t.Fatalf("detail = %#v, want tenant/item/surface", details[0])
+	}
+	if details[0].IncompleteForScoring {
+		t.Fatalf("IncompleteForScoring = true, want false")
+	}
+}
+
 func TestProcessCacheMissRehydratesAndCachesSite(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	cache := &fakeSiteCache{found: false}
