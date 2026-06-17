@@ -57,6 +57,11 @@ IMPLEMENTACION.md Registro detallado del estado de fases de desarrollo
 
 Las migraciones de la base de datos PostgreSQL se gestionan mediante `golang-migrate` y aplican automáticamente el esquema inicial y las nuevas tablas para ítems/órdenes.
 
+Ej:
+```bash
+migrate -path migrations/postgres -database "postgres://user:pass@localhost:5432/go_analytics?sslmode=disable" up
+```
+
 ### 1. Ejecución Automática (Recomendado)
 Al levantar el entorno sandbox mediante los scripts provistos, la base de datos se migrará automáticamente a la última versión:
 ```bash
