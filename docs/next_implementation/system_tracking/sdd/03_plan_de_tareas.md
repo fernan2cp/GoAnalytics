@@ -46,7 +46,7 @@ Evidencia:
 
 ### TASK-ST-0201: Cubrir seguridad de context en tests del worker
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-010`, `REQ-ST-012`, `REQ-ST-013`, `REQ-ST-028`
 
@@ -61,11 +61,13 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `services/worker/internal/application/usecases/payload_safety.go` inspecciona claves bloqueadas en `properties` y `context`, incluyendo mapas y arrays anidados.
+- 2026-06-27: `services/worker/internal/application/usecases/process_events_test.go` cubre claves sensibles de primer nivel, anidadas y campos desconocidos seguros en `context`.
+- 2026-06-27: Validacion ejecutada: `go test ./...` en `services/worker` y `services/ingest`.
 
 ### TASK-ST-0202: Definir y probar limites de payload contextual
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-011`, `REQ-ST-013`, `REQ-ST-028`
 
@@ -80,7 +82,10 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: Se definieron limites genericos de 64 KiB serializados y profundidad maxima 16 por objeto `properties`/`context` en el worker.
+- 2026-06-27: `process_events.go` rechaza violaciones con `payload_too_large` y detalle auditable `payload_issue`.
+- 2026-06-27: `docs/event-conventions.md` documenta los limites publicos de payload contextual.
+- 2026-06-27: Validacion ejecutada: `go test ./...` en `services/worker` y `services/ingest`.
 
 ## Fase 3 - SDK Web
 

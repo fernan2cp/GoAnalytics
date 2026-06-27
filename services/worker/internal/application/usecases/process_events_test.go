@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,148 @@ func TestProcessValidEventPersistsAndMarksDeduplicator(t *testing.T) {
 	}
 }
 
+func TestProcessAcceptsSafeUnknownContextFields(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	eventRepository := &fakeEventRepository{}
+	useCase := newTestProcessUseCase(now, eventRepository, &fakeRejectedRepository{}, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.Context = map[string]any{
+		"app_area": "backoffice",
+		"feature":  "catalog_search",
+		"surface":  "drawer",
+		"runtime": map[string]any{
+			"safe_unknown": "accepted",
+		},
+	}
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 1 {
+		t.Fatalf("valid events = %d, want 1", len(eventRepository.events))
+	}
+	if eventRepository.events[0].Context["feature"] != "catalog_search" {
+		t.Fatalf("context = %#v, want feature preserved", eventRepository.events[0].Context)
+	}
+}
+
+func TestProcessRejectsSensitivePayloadKeys(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*dto.RawEvent)
+		wantKey string
+	}{
+		{
+			name: "properties first level",
+			mutate: func(raw *dto.RawEvent) {
+				raw.Properties = map[string]any{"password": "hidden"}
+			},
+			wantKey: "password",
+		},
+		{
+			name: "context first level",
+			mutate: func(raw *dto.RawEvent) {
+				raw.Context = map[string]any{"token": "hidden"}
+			},
+			wantKey: "token",
+		},
+		{
+			name: "context nested map",
+			mutate: func(raw *dto.RawEvent) {
+				raw.Context = map[string]any{"runtime": map[string]any{"access_token": "hidden"}}
+			},
+			wantKey: "access_token",
+		},
+		{
+			name: "context nested array",
+			mutate: func(raw *dto.RawEvent) {
+				raw.Context = map[string]any{"runtime": []any{map[string]any{"secret": "hidden"}}}
+			},
+			wantKey: "secret",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rejectedRepository := &fakeRejectedRepository{}
+			eventRepository := &fakeEventRepository{}
+			useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+			raw := validRawEvent()
+			tt.mutate(&raw)
+
+			if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			if len(eventRepository.events) != 0 {
+				t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+			}
+			if len(rejectedRepository.events) != 1 {
+				t.Fatalf("rejected events = %d, want 1", len(rejectedRepository.events))
+			}
+			rejected := rejectedRepository.events[0]
+			if rejected.Reason != rejection.ReasonBlockedKey {
+				t.Fatalf("Reason = %q, want %q", rejected.Reason, rejection.ReasonBlockedKey)
+			}
+			if rejected.RawPayload["blocked_key"] != tt.wantKey {
+				t.Fatalf("blocked_key = %#v, want %q", rejected.RawPayload["blocked_key"], tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestProcessRejectsPayloadLimitViolations(t *testing.T) {
+	tests := []struct {
+		name      string
+		mutate    func(*dto.RawEvent)
+		wantIssue string
+	}{
+		{
+			name: "context size",
+			mutate: func(raw *dto.RawEvent) {
+				raw.Context = map[string]any{"blob": strings.Repeat("x", maxPayloadObjectBytes+1)}
+			},
+			wantIssue: "context_size",
+		},
+		{
+			name: "context depth",
+			mutate: func(raw *dto.RawEvent) {
+				value := map[string]any{"leaf": "ok"}
+				for i := 0; i < maxPayloadDepth; i++ {
+					value = map[string]any{"nested": value}
+				}
+				raw.Context = value
+			},
+			wantIssue: "context_depth",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rejectedRepository := &fakeRejectedRepository{}
+			eventRepository := &fakeEventRepository{}
+			useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+			raw := validRawEvent()
+			tt.mutate(&raw)
+
+			if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			if len(eventRepository.events) != 0 {
+				t.Fatalf("valid events = %d, want 0", len(eventRepository.events))
+			}
+			if len(rejectedRepository.events) != 1 {
+				t.Fatalf("rejected events = %d, want 1", len(rejectedRepository.events))
+			}
+			rejected := rejectedRepository.events[0]
+			if rejected.Reason != rejection.ReasonPayloadTooLarge {
+				t.Fatalf("Reason = %q, want %q", rejected.Reason, rejection.ReasonPayloadTooLarge)
+			}
+			if rejected.RawPayload["payload_issue"] != tt.wantIssue {
+				t.Fatalf("payload_issue = %#v, want %q", rejected.RawPayload["payload_issue"], tt.wantIssue)
+			}
+		})
+	}
+}
 func TestProcessValidItemEventBuildsNormalizedDetails(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	eventRepository := &fakeEventRepository{}

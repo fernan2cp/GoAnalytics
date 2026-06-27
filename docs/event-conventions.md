@@ -49,7 +49,7 @@ Este documento define las reglas base para nombrar, versionar y transportar even
 - `properties` debe transportar el detalle variable del evento. Por ejemplo, en busquedas: `search_id`, `query_length`, `result_count`, `result_type`, `result_id` y `position`.
 - No se deben enviar secretos, credenciales, tokens, cookies, documentos personales ni tarjetas.
 - En eventos de formularios no se deben enviar valores ingresados por el usuario. Solo se permiten nombres tecnicos de campos, codigos de error y metricas agregadas.
-- `search_term` es opt-in: solo debe enviarse cuando el integrador confirma que no contiene datos personales, secretos ni texto libre sensible. Si no es seguro, usar `query_length`, `has_query` y filtros agregados.
+- `search_term` es opt-in: solo debe enviarse cuando el integrador confirma que no contiene datos personales, secretos ni texto libre sensible. Si no es seguro, usar `query_length`, `has_query` y filtros agregados.- Cada objeto `properties` y `context` debe mantenerse por debajo de 64 KiB serializado y con profundidad maxima 16. Eventos que superen esos limites pueden ser rechazados por el worker como `payload_too_large`.
 
 ## Claves sensibles bloqueadas
 

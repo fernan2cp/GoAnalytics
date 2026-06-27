@@ -138,6 +138,12 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			rejectedEvents = append(rejectedEvents, rejected)
 			continue
 		}
+		if payloadIssue := payloadLimitViolation(raw); payloadIssue != "" {
+			rejected := uc.buildRejectedEvent(raw, rejection.ReasonPayloadTooLarge, rejection.SeverityWarning, "")
+			rejected.RawPayload["payload_issue"] = payloadIssue
+			rejectedEvents = append(rejectedEvents, rejected)
+			continue
+		}
 
 		exact := exactDedupCandidate(raw)
 		seen, err := uc.deduplicator.Seen(ctx, exact.Key)
