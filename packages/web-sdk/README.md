@@ -44,6 +44,15 @@ analytics.formAttempt({
 - `track(eventName, properties?, options?)` encola eventos genericos.
 - `page(properties?, options?)` envia un evento `page_view` con datos de navegacion.
 - `checkoutStarted(payload, options?)` registra el inicio de checkout con identidad funcional cuando existe `checkout_id`, `cart_id` u `order_draft_id`.
+- `featureOpened(payload?, options?)` registra apertura de una feature o superficie funcional.
+- `featureActionPerformed(payload, options?)` registra una accion dentro de una feature.
+- `searchPerformed(payload, options?)` registra una busqueda ejecutada.
+- `searchResultSelected(payload, options?)` registra la seleccion de un resultado.
+- `searchEmptyResult(payload, options?)` registra una busqueda sin resultados.
+- `searchAbandoned(payload, options?)` registra abandono de busqueda sin seleccion.
+- `rageClickDetected(payload?, options?)` registra una secuencia de clicks repetidos.
+- `deadClickDetected(payload?, options?)` registra un click sin efecto observable esperado.
+- `flowAbandoned(payload?, options?)` registra abandono de una tarea o flujo.
 - `formAttempt(payload, options?)` registra un intento de validacion o envio.
 - `formCompleted(payload, options?)` registra un formulario completado.
 - `formAbandoned(payload, options?)` registra abandono de formulario.
@@ -55,6 +64,40 @@ analytics.formAttempt({
 
 El transporte por defecto usa `fetch` con `Authorization: Bearer <tracking_jwt>` y `keepalive` para respetar el contrato de ingesta. `sendBeacon` puede habilitarse con `beaconEndpoint` cuando exista un endpoint compatible que no requiera headers personalizados.
 
+
+## Contexto y eventos de comportamiento
+
+Todos los helpers nuevos delegan en `track`, por lo que aceptan `TrackOptions` con `context`, `logicalEventId`, `idempotencyKey`, `sessionId`, `userId`, `path` y demas campos comunes. `context` debe usarse para ubicar el evento en un entorno reutilizable, por ejemplo `app_area`, `feature`, `surface`, `entry_point`, `component_id`, `flow_id`, `entity_type` y `entity_id`.
+
+```ts
+analytics.featureOpened({ open_reason: "user_action" }, {
+  logicalEventId: "feature_opened:catalog_search:drawer",
+  context: {
+    app_area: "backoffice",
+    feature: "catalog_search",
+    surface: "drawer",
+    entry_point: "navigation_menu",
+    component_id: "item_search"
+  }
+});
+
+analytics.searchResultSelected({
+  search_id: "search_123",
+  result_type: "item",
+  result_id: "item_100",
+  position: 1,
+  query_length: 4
+}, {
+  context: {
+    feature: "catalog_search",
+    component_id: "item_search"
+  }
+});
+```
+
+`search_term` es opt-in. Solo debe enviarse si la aplicacion integradora confirma que no contiene datos personales ni texto libre sensible; si no, enviar `query_length`, `has_query`, `filters_count`, `result_count` y `search_id`.
+
+Los helpers de frustracion (`rageClickDetected`, `deadClickDetected`) y abandono (`flowAbandoned`, `formAbandoned`, `searchAbandoned`) no realizan deteccion automatica: solo empaquetan eventos cuando la aplicacion host decide emitirlos.
 ## Opciones principales
 
 ```ts

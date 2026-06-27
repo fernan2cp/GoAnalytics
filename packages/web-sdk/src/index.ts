@@ -49,6 +49,15 @@ export type AnalyticsClient = {
   track(eventName: string, properties?: EventProperties, options?: TrackOptions): void;
   page(properties?: EventProperties, options?: PageOptions): void;
   checkoutStarted(payload: CheckoutStartedPayload, options?: TrackOptions): void;
+  featureOpened(payload?: FeatureOpenedPayload, options?: TrackOptions): void;
+  featureActionPerformed(payload: FeatureActionPerformedPayload, options?: TrackOptions): void;
+  searchPerformed(payload: SearchPerformedPayload, options?: TrackOptions): void;
+  searchResultSelected(payload: SearchResultSelectedPayload, options?: TrackOptions): void;
+  searchEmptyResult(payload: SearchEmptyResultPayload, options?: TrackOptions): void;
+  searchAbandoned(payload: SearchAbandonedPayload, options?: TrackOptions): void;
+  rageClickDetected(payload?: FrustrationPayload, options?: TrackOptions): void;
+  deadClickDetected(payload?: FrustrationPayload, options?: TrackOptions): void;
+  flowAbandoned(payload?: FlowAbandonedPayload, options?: TrackOptions): void;
   formAttempt(payload: FormAttemptPayload, options?: TrackOptions): void;
   formCompleted(payload: FormCompletedPayload, options?: TrackOptions): void;
   formAbandoned(payload: FormAbandonedPayload, options?: TrackOptions): void;
@@ -81,6 +90,61 @@ type AnalyticsEventPayload = {
 };
 
 export type FormFieldErrors = Record<string, string>;
+
+export type FeatureOpenedPayload = EventProperties & {
+  open_reason?: string;
+};
+
+export type FeatureActionPerformedPayload = EventProperties & {
+  action: string;
+  result?: string;
+};
+
+export type SearchPerformedPayload = EventProperties & {
+  search_id?: string;
+  search_term?: string;
+  query_length?: number;
+  result_count?: number;
+  filters_count?: number;
+  has_query?: boolean;
+};
+
+export type SearchResultSelectedPayload = EventProperties & {
+  search_id?: string;
+  result_type: string;
+  result_id: string;
+  position?: number;
+  query_length?: number;
+  search_term?: string;
+};
+
+export type SearchEmptyResultPayload = EventProperties & {
+  search_id?: string;
+  query_length?: number;
+  filters_count?: number;
+  search_term?: string;
+};
+
+export type SearchAbandonedPayload = EventProperties & {
+  search_id?: string;
+  query_length?: number;
+  elapsed_ms?: number;
+  search_term?: string;
+};
+
+export type FrustrationPayload = EventProperties & {
+  target_id?: string;
+  clicks_count?: number;
+  window_ms?: number;
+  elapsed_ms?: number;
+};
+
+export type FlowAbandonedPayload = EventProperties & {
+  flow_id?: string;
+  step_id?: string;
+  reason?: string;
+  elapsed_ms?: number;
+};
 
 export type CheckoutStartedPayload = {
   cart_id?: string;
@@ -245,6 +309,42 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
     });
   }
 
+  function featureOpened(payload: FeatureOpenedPayload = {}, eventOptions: TrackOptions = {}): void {
+    track("feature_opened", payload, eventOptions);
+  }
+
+  function featureActionPerformed(payload: FeatureActionPerformedPayload, eventOptions: TrackOptions = {}): void {
+    track("feature_action_performed", payload, eventOptions);
+  }
+
+  function searchPerformed(payload: SearchPerformedPayload, eventOptions: TrackOptions = {}): void {
+    track("search_performed", payload, eventOptions);
+  }
+
+  function searchResultSelected(payload: SearchResultSelectedPayload, eventOptions: TrackOptions = {}): void {
+    track("search_result_selected", payload, eventOptions);
+  }
+
+  function searchEmptyResult(payload: SearchEmptyResultPayload, eventOptions: TrackOptions = {}): void {
+    track("search_empty_result", payload, eventOptions);
+  }
+
+  function searchAbandoned(payload: SearchAbandonedPayload, eventOptions: TrackOptions = {}): void {
+    track("search_abandoned", payload, eventOptions);
+  }
+
+  function rageClickDetected(payload: FrustrationPayload = {}, eventOptions: TrackOptions = {}): void {
+    track("rage_click_detected", payload, eventOptions);
+  }
+
+  function deadClickDetected(payload: FrustrationPayload = {}, eventOptions: TrackOptions = {}): void {
+    track("dead_click_detected", payload, eventOptions);
+  }
+
+  function flowAbandoned(payload: FlowAbandonedPayload = {}, eventOptions: TrackOptions = {}): void {
+    track("flow_abandoned", payload, eventOptions);
+  }
+
   function formAttempt(payload: FormAttemptPayload, eventOptions: TrackOptions = {}): void {
     track("form_validation_attempt", sanitizeFormPayload(payload), { ...eventOptions, critical: eventOptions.critical ?? true });
   }
@@ -351,6 +451,15 @@ export function createAnalyticsClient(options: AnalyticsClientOptions): Analytic
     track,
     page,
     checkoutStarted,
+    featureOpened,
+    featureActionPerformed,
+    searchPerformed,
+    searchResultSelected,
+    searchEmptyResult,
+    searchAbandoned,
+    rageClickDetected,
+    deadClickDetected,
+    flowAbandoned,
     formAttempt,
     formCompleted,
     formAbandoned,

@@ -91,7 +91,7 @@ Evidencia:
 
 ### TASK-ST-0301: Agregar tipos y helpers de feature
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-014`, `REQ-ST-015`, `REQ-ST-017`, `REQ-ST-028`
 
@@ -106,11 +106,13 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `packages/web-sdk/src/index.ts` agrega tipos y metodos `featureOpened` y `featureActionPerformed` delegando en `track`.
+- 2026-06-27: `packages/web-sdk/test/behavior-helpers.test.mjs` valida `event_name`, `properties`, `context`, `logicalEventId` e `idempotencyKey`.
+- 2026-06-27: Validacion ejecutada: `npm test` en `packages/web-sdk`.
 
 ### TASK-ST-0302: Agregar tipos y helpers de busqueda y frustracion
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-006`, `REQ-ST-008`, `REQ-ST-014`, `REQ-ST-015`, `REQ-ST-017`, `REQ-ST-028`
 
@@ -125,11 +127,14 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `packages/web-sdk/src/index.ts` agrega helpers `searchPerformed`, `searchResultSelected`, `searchEmptyResult`, `searchAbandoned`, `rageClickDetected`, `deadClickDetected` y `flowAbandoned`.
+- 2026-06-27: `packages/web-sdk/README.md` documenta `search_term` como opt-in seguro y contexto opcional.
+- 2026-06-27: `packages/web-sdk/test/behavior-helpers.test.mjs` valida payload minimo y contexto opcional de busqueda/frustracion.
+- 2026-06-27: Validacion ejecutada: `npm test` en `packages/web-sdk`.
 
 ### TASK-ST-0303: Mantener sanitizacion de formularios
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-007`, `REQ-ST-016`, `REQ-ST-028`
 
@@ -143,7 +148,10 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: Se conservaron los helpers existentes de formulario y su sanitizacion previa.
+- 2026-06-27: `packages/web-sdk/test/behavior-helpers.test.mjs` cubre claves bloqueadas (`value`, `token`) y nombres de campo inseguros (`email`, `password`) sin enviar valores de usuario.
+- 2026-06-27: `packages/web-sdk/README.md` mantiene la regla de formularios sin valores reales ingresados por usuarios.
+- 2026-06-27: Validacion ejecutada: `npm test` en `packages/web-sdk`.
 
 ## Fase 4 - Persistencia Y Normalizacion
 
