@@ -180,6 +180,68 @@ func TestProcessRejectsPayloadLimitViolations(t *testing.T) {
 		})
 	}
 }
+func TestProcessPersistsRawContext(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	eventRepository := &fakeEventRepository{}
+	useCase := newTestProcessUseCase(now, eventRepository, &fakeRejectedRepository{}, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.Context = map[string]any{
+		"app_area": "backoffice",
+		"feature":  "catalog_search",
+		"runtime": map[string]any{
+			"sdk_mode": "manual",
+		},
+	}
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 1 {
+		t.Fatalf("valid events = %d, want 1", len(eventRepository.events))
+	}
+	persisted := eventRepository.events[0]
+	if persisted.Context["app_area"] != "backoffice" || persisted.Context["feature"] != "catalog_search" {
+		t.Fatalf("context = %#v, want raw context preserved", persisted.Context)
+	}
+	runtime, ok := persisted.Context["runtime"].(map[string]any)
+	if !ok || runtime["sdk_mode"] != "manual" {
+		t.Fatalf("runtime context = %#v, want nested map preserved", persisted.Context["runtime"])
+	}
+}
+
+func TestProcessKeepsItemSelectedForContextAsRawEvent(t *testing.T) {
+	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
+	eventRepository := &fakeEventRepository{}
+	useCase := newTestProcessUseCase(now, eventRepository, &fakeRejectedRepository{}, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.EventName = "item_selected_for_context"
+	raw.Properties = map[string]any{
+		"item_id":    "100",
+		"variant_id": "100-red-m",
+		"item_type":  "product",
+		"search_id":  "search_1",
+		"position":   float64(1),
+	}
+	raw.Context = map[string]any{
+		"feature":      "catalog_search",
+		"surface":      "drawer",
+		"component_id": "item_search",
+	}
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 1 {
+		t.Fatalf("valid events = %d, want 1", len(eventRepository.events))
+	}
+	persisted := eventRepository.events[0]
+	if len(persisted.ItemDetails) != 0 {
+		t.Fatalf("ItemDetails = %#v, want none for item_selected_for_context v1", persisted.ItemDetails)
+	}
+	if persisted.Properties["item_id"] != "100" || persisted.Context["component_id"] != "item_search" {
+		t.Fatalf("persisted = %#v/%#v, want raw properties and context", persisted.Properties, persisted.Context)
+	}
+}
 func TestProcessValidItemEventBuildsNormalizedDetails(t *testing.T) {
 	now := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	eventRepository := &fakeEventRepository{}

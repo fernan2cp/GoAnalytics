@@ -157,7 +157,7 @@ Evidencia:
 
 ### TASK-ST-0401: Validar persistencia cruda de contexto
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-018`, `REQ-ST-019`, `REQ-ST-028`
 
@@ -171,11 +171,14 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `services/worker/internal/adapters/outbound/postgres/event_repository.go` ya serializa `properties` y `context` como JSONB no nulo en `analytics_events`.
+- 2026-06-27: `services/worker/internal/application/usecases/process_events_test.go` valida preservacion de `context` crudo anidado y `context` vacio para eventos sin contexto.
+- 2026-06-27: `item_impression` sigue generando `ItemDetails` normalizados.
+- 2026-06-27: Validacion ejecutada: `go test ./...` en `services/worker` y `services/ingest`.
 
 ### TASK-ST-0402: Decidir normalizacion de `item_selected_for_context`
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-009`, `REQ-ST-020`, `REQ-ST-021`
 
@@ -189,7 +192,11 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: Decision v1: `item_selected_for_context` queda persistido como evento crudo en `analytics_events`, sin fila en `analytics_event_items`.
+- 2026-06-27: `services/worker/internal/application/usecases/item_details.go` acota la normalizacion a eventos de items soportados: `item_impression`, `item_viewed`, `item_image_zoomed`, `cart_item_added`, `checkout_started` y `purchase_completed`.
+- 2026-06-27: `process_events_test.go` valida que `item_selected_for_context` conserva `properties` y `context` pero no crea `ItemDetails`.
+- 2026-06-27: `docs/event-contract.md` mantiene documentado que `item_selected_for_context` es crudo en v1 salvo extension explicita.
+- 2026-06-27: Validacion ejecutada: `go test ./...` en `services/worker`.
 
 ## Fase 5 - Agregados Opcionales
 

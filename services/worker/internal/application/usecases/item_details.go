@@ -16,6 +16,9 @@ import (
 // item. No persiste datos ni aplica reglas SQL; solo traduce properties hacia
 // tipos de dominio usados por el puerto de persistencia.
 func buildItemDetails(valid event.ValidatedEvent) []event.ItemDetail {
+	if !normalizesItemDetails(valid.EventName) {
+		return nil
+	}
 	items := extractItemPayloads(valid.Properties)
 	if len(items) == 0 {
 		return nil
@@ -27,6 +30,15 @@ func buildItemDetails(valid event.ValidatedEvent) []event.ItemDetail {
 		details = append(details, detail)
 	}
 	return details
+}
+
+func normalizesItemDetails(eventName string) bool {
+	switch eventName {
+	case "item_impression", "item_viewed", "item_image_zoomed", "cart_item_added", "checkout_started", "purchase_completed":
+		return true
+	default:
+		return false
+	}
 }
 
 // buildOrderDetail normaliza la cabecera de checkout u orden cuando existe.
