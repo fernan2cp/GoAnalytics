@@ -225,7 +225,7 @@ Evidencia:
 
 ### TASK-ST-0601: Documentar contratos para integradores y ejecutar validacion final
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-002`, `REQ-ST-010`, `REQ-ST-026`, `REQ-ST-027`, `REQ-ST-028`, `REQ-ST-029`
 
@@ -244,4 +244,9 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: Se creo `docs/integration/system-tracking-contracts.md` como referencia autosuficiente para integradores.
+- 2026-06-27: La referencia documenta endpoint de ingesta, autenticacion, forma batch, campos comunes, `properties`, `context`, eventos soportados, seguridad, deduplicacion, persistencia y decision de agregados fuera de v1.
+- 2026-06-27: Validacion ejecutada: `make test` desde la raiz del repo.
+- 2026-06-27: Validacion ejecutada: `npm test` en `packages/web-sdk`.
+- 2026-06-27: Revision documental ejecutada: `rg -n -i "\b(dragonfullav|erp|crm|cms|pos)\b" docs/integration/system-tracking-contracts.md docs/event-contract.md docs/event-conventions.md` sin resultados.
+- 2026-06-27: No se agregaron migraciones ni endpoints de agregados en GoAnalytics v1.
