@@ -37,17 +37,19 @@ Este documento define las reglas base para nombrar, versionar y transportar even
 - `path` debe representar la ruta sin dominio, por ejemplo `/items/123`.
 - `referrer` puede ser vacio cuando no existe o no se permite capturarlo.
 
-## Propiedades
+## Propiedades Y Contexto
 
-- `properties` contiene datos especificos del evento.
-- `context` contiene datos de entorno, dispositivo, pagina, SDK o runtime.
+- `properties` contiene datos especificos del evento: accion, resultado, item, busqueda, formulario o importes asociados al hecho observado.
+- `context` contiene datos de entorno y ubicacion logica reutilizables: area de aplicacion, feature, superficie, punto de entrada, componente, flujo, entidad no sensible, dispositivo, pagina, SDK o runtime.
 - Ambos campos deben serializarse como objeto JSON; si no hay datos, deben enviarse como `{}`.
-- Las propiedades deben usar claves `snake_case`.
+- Las claves deben usar `snake_case`.
 - Los valores deben ser JSON simples: string, number, boolean, null, array u objeto.
+- Los campos desconocidos son validos cuando son JSON seguro y respetan las reglas de datos sensibles.
+- `context` no tiene catalogo cerrado. Las claves recomendadas para system tracking son `app_area`, `feature`, `surface`, `entry_point`, `flow_id`, `component_id`, `entity_type` y `entity_id`.
+- `properties` debe transportar el detalle variable del evento. Por ejemplo, en busquedas: `search_id`, `query_length`, `result_count`, `result_type`, `result_id` y `position`.
 - No se deben enviar secretos, credenciales, tokens, cookies, documentos personales ni tarjetas.
-- En eventos de formularios no se deben enviar valores ingresados por el usuario.
-  Solo se permiten nombres tecnicos de campos, codigos de error y metricas
-  agregadas.
+- En eventos de formularios no se deben enviar valores ingresados por el usuario. Solo se permiten nombres tecnicos de campos, codigos de error y metricas agregadas.
+- `search_term` es opt-in: solo debe enviarse cuando el integrador confirma que no contiene datos personales, secretos ni texto libre sensible. Si no es seguro, usar `query_length`, `has_query` y filtros agregados.
 
 ## Claves sensibles bloqueadas
 
@@ -72,11 +74,17 @@ document
 ## Eventos recomendados
 
 - `page_view`: vista de pagina o cambio de ruta.
+- `feature_opened`: apertura de una feature o superficie funcional.
+- `feature_action_performed`: accion del usuario dentro de una feature.
 - `item_impression`: impresion real de item visible en una superficie.
 - `item_viewed`: vista de item.
 - `item_image_zoomed`: zoom o ampliacion de imagen de item.
 - `cart_item_added`: incorporacion de item al carrito.
 - `search_performed`: busqueda ejecutada.
+- `search_result_selected`: seleccion de un resultado.
+- `search_empty_result`: busqueda sin resultados.
+- `search_abandoned`: busqueda abandonada sin seleccion.
+- `item_selected_for_context`: seleccion de item asociada a contexto generico.
 - `checkout_started`: inicio de checkout.
 - `purchase_completed`: compra completada.
 - `signup_started`: inicio de registro.
@@ -86,6 +94,9 @@ document
 - `form_abandoned`: formulario abandonado.
 - `form_step_advanced`: avance de paso.
 - `form_step_viewed`: visualizacion de paso.
+- `flow_abandoned`: abandono explicito o inferido de una tarea.
+- `rage_click_detected`: secuencia de clicks repetidos sobre una superficie.
+- `dead_click_detected`: click sin efecto observable esperado.
 
 ## Eventos de items para scoring
 

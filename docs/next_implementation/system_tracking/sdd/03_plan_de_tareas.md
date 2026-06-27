@@ -4,7 +4,7 @@
 
 ### TASK-ST-0101: Actualizar contrato publico de contexto
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-001`, `REQ-ST-002`, `REQ-ST-003`, `REQ-ST-004`, `REQ-ST-026`, `REQ-ST-027`
 
@@ -19,11 +19,12 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `docs/event-contract.md` documenta `context` generico opcional, convenciones recomendadas y frontera `context` vs `properties`.
+- 2026-06-27: `docs/event-conventions.md` acepta campos desconocidos seguros y define claves recomendadas sin catalogo cerrado.
 
 ### TASK-ST-0102: Documentar eventos genericos de comportamiento
 
-Estado: `pending`
+Estado: `done`
 
 Requisitos: `REQ-ST-005`, `REQ-ST-006`, `REQ-ST-007`, `REQ-ST-008`, `REQ-ST-009`, `REQ-ST-012`, `REQ-ST-026`, `REQ-ST-027`
 
@@ -38,7 +39,8 @@ Acciones:
 
 Evidencia:
 
-- pendiente.
+- 2026-06-27: `docs/event-contract.md` agrega eventos genericos de feature, busqueda, formularios, abandono y frustracion con ejemplos no acoplados.
+- 2026-06-27: `docs/event-conventions.md` incorpora eventos recomendados, regla opt-in de `search_term` y mantiene formularios sin valores de usuario.
 
 ## Fase 2 - Validacion Y Seguridad Backend
 
