@@ -1,4 +1,4 @@
-﻿# Contrato De Agregados Y Consulta
+# Contrato De Agregados Y Consulta
 
 ## Objetivo
 
@@ -142,6 +142,25 @@ Fallback generico sugerido:
 5. `site_item_type`
 6. `site_global`
 
+
+## Decision V1 Coordinada
+
+Para system tracking v1, GoAnalytics no expone endpoint online de agregados ni crea tabla/materializacion propia de top items por contexto.
+
+Responsabilidades de GoAnalytics en v1:
+
+- Ingerir eventos normalizados y seguros.
+- Persistir `analytics_events.properties` y `analytics_events.context` completos.
+- Mantener normalizacion existente de eventos de items soportados.
+- Permitir lectura server-to-server o export controlado por infraestructura del integrador.
+
+Responsabilidades fuera de GoAnalytics en v1:
+
+- Calcular rankings operativos por contexto.
+- Materializar sugerencias por tenant o proyecto.
+- Definir pesos de negocio, ventanas, fallback y permisos de consumo.
+
+Esta decision evita acoplar el microservicio a necesidades de latencia, catalogo, tenant o negocio de un integrador especifico. Una futura version puede implementar `analytics_context_item_aggregates` y `GET /v1/aggregates/items/top` si existe una decision explicita y pruebas de carga/seguridad.
 ## Alternativa Sin Endpoint
 
 Si no se implementa endpoint de consulta, GoAnalytics puede limitarse a persistir eventos y detalles normalizados. El integrador puede leer la base de analytics mediante jobs server-to-server y materializar sus propios agregados.

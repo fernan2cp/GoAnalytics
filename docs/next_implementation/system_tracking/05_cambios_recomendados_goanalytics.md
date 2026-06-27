@@ -1,4 +1,4 @@
-﻿# Cambios Recomendados En GoAnalytics
+# Cambios Recomendados En GoAnalytics
 
 ## Principios
 
@@ -83,6 +83,17 @@ Campos candidatos si se normalizan:
 No usar `surface` si ya existe con semantica de item; preferir `surface_context` o documentar una unica semantica clara.
 
 ## Agregados Opcionales
+
+Decision v1: los agregados contextuales quedan fuera de GoAnalytics. El servicio conserva eventos crudos y detalles normalizados existentes; los integradores pueden leer/exportar datos en modo server-to-server y materializar agregados propios.
+
+No crear en v1:
+
+- migracion `analytics_context_item_aggregates`;
+- job periodico de scoring contextual;
+- endpoint `GET /v1/aggregates/items/top`;
+- credencial `query_jwt` para agregados online.
+
+Fase posterior opcional:
 
 Si GoAnalytics implementa agregados, deben ejecutarse fuera de ingesta:
 
