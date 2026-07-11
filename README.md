@@ -122,7 +122,7 @@ Consulta la [Guía del Sandbox](docs/sandbox/README.md) para más información.
 La documentación técnica y de diseño se organiza en la carpeta `docs/`:
 
 - **Arquitectura y Diseño Hexagonal:** [docs/architecture.md](docs/architecture.md) y [docs/hexagonal-architecture.md](docs/hexagonal-architecture.md)
-- **Captura de Eventos de Ítems (SDD):** [docs/next_implementation/item_event_capture_design.md](docs/next_implementation/item_event_capture_design.md) y la guía detallada [docs/next_implementation/item_event_capture_sdd/README.md](docs/next_implementation/item_event_capture_sdd/README.md)
+- **Captura de Eventos de Ítems (SDD):** [docs/next_implementation/_complete/item_event_capture/item_event_capture_design.md](docs/next_implementation/_complete/item_event_capture/item_event_capture_design.md) y la guía detallada [docs/next_implementation/_complete/item_event_capture/item_event_capture_sdd/README.md](docs/next_implementation/_complete/item_event_capture/item_event_capture_sdd/README.md)
 - **Convenciones y Contratos de Eventos:** [docs/event-conventions.md](docs/event-conventions.md) y [docs/event-contract.md](docs/event-contract.md)
 - **Configuración y Seguridad:** [docs/env.md](docs/env.md) y [docs/jwt-contract.md](docs/jwt-contract.md)
 - **Persistencia de Datos:** [docs/persistence.md](docs/persistence.md)
