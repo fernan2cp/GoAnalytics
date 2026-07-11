@@ -2,19 +2,19 @@
 
 ## Proposito
 
-Este paquete convierte las guias de `docs/next_implementation/system_tracking/*` en un plan SDD implementable para extender `GoAnalytics` con tracking generico de uso, busqueda, seleccion, friccion y abandono.
+Este paquete convierte las guias de `docs/next_implementation/_complete/system_tracking/*` en un plan SDD implementable para extender `GoAnalytics` con tracking generico de uso, busqueda, seleccion, friccion y abandono.
 
 El objetivo es que la implementacion mantenga el contrato publico estable, acepte contexto funcional opcional, refuerce seguridad de payloads y documente agregados contextuales opcionales sin convertir la ingesta en un motor de recomendacion online.
 
 ## Fuente
 
-- `docs/next_implementation/system_tracking/README.md`
-- `docs/next_implementation/system_tracking/01_contexto_y_alcance_generico.md`
-- `docs/next_implementation/system_tracking/02_contrato_contexto_eventos.md`
-- `docs/next_implementation/system_tracking/03_contrato_eventos_comportamiento.md`
-- `docs/next_implementation/system_tracking/04_contrato_agregados_y_consulta.md`
-- `docs/next_implementation/system_tracking/05_cambios_recomendados_goanalytics.md`
-- `docs/next_implementation/system_tracking/06_plan_pruebas_contrato.md`
+- `docs/next_implementation/_complete/system_tracking/README.md`
+- `docs/next_implementation/_complete/system_tracking/01_contexto_y_alcance_generico.md`
+- `docs/next_implementation/_complete/system_tracking/02_contrato_contexto_eventos.md`
+- `docs/next_implementation/_complete/system_tracking/03_contrato_eventos_comportamiento.md`
+- `docs/next_implementation/_complete/system_tracking/04_contrato_agregados_y_consulta.md`
+- `docs/next_implementation/_complete/system_tracking/05_cambios_recomendados_goanalytics.md`
+- `docs/next_implementation/_complete/system_tracking/06_plan_pruebas_contrato.md`
 
 ## Mapa De Documentos
 

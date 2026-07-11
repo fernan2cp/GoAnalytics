@@ -217,8 +217,8 @@ Acciones:
 Evidencia:
 
 - 2026-06-27: Decision v1 coordinada: GoAnalytics no expone endpoint online de agregados ni crea tabla/job de top items por contexto.
-- 2026-06-27: `docs/next_implementation/system_tracking/04_contrato_agregados_y_consulta.md` documenta la decision, responsabilidades de GoAnalytics y responsabilidades del integrador.
-- 2026-06-27: `docs/next_implementation/system_tracking/05_cambios_recomendados_goanalytics.md` explicita que no se crean migraciones, jobs, endpoint ni `query_jwt` de agregados en v1.
+- 2026-06-27: `docs/next_implementation/_complete/system_tracking/04_contrato_agregados_y_consulta.md` documenta la decision, responsabilidades de GoAnalytics y responsabilidades del integrador.
+- 2026-06-27: `docs/next_implementation/_complete/system_tracking/05_cambios_recomendados_goanalytics.md` explicita que no se crean migraciones, jobs, endpoint ni `query_jwt` de agregados en v1.
 - 2026-06-27: Validacion documental: no se agregaron migraciones ni endpoints para agregados.
 
 ## Fase 6 - Referencia De Contratos Y Validacion Final

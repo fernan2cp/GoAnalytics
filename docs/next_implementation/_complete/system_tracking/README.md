@@ -38,3 +38,4 @@ Tampoco debe transformarse obligatoriamente en motor de recomendacion online. Pu
 4. `04_contrato_agregados_y_consulta.md`
 5. `05_cambios_recomendados_goanalytics.md`
 6. `06_plan_pruebas_contrato.md`
+7. `07_propuesta_evolucion_futura_agregados.md`
