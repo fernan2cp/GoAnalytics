@@ -1,0 +1,431 @@
+# Plan De Tareas
+
+## 1. Reglas De Ejecución
+
+- Todas las tareas comienzan en estado `pending`.
+- Una tarea solo puede pasar a `done` cuando sus criterios `AC-CA-*` estén satisfechos y la evidencia quede enlazada en este documento y en `15_estado_implementacion.md`.
+- Los cambios deben preservar `POST /v1/events` y permanecer desactivados por defecto hasta el paso de rollout correspondiente.
+- Las tareas del proyecto principal describen comportamiento y contrato; sus rutas internas se decidirán en ese repositorio.
+- Las migraciones se ejecutan en orden y no se revierten en producción como mecanismo operativo.
+
+## 2. Fase 0 — Confiabilidad Y Contratos
+
+### TASK-CA-0001 — Recuperar Pendientes De Redis De Forma Segura
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-006`, `REQ-CA-007`, `REQ-CA-008`, `REQ-CA-010`.
+- **Criterios:** `AC-CA-002`, `AC-CA-003`.
+- **Dependencias:** ninguna.
+- **Acciones:**
+  1. Incorporar recuperación con `XAUTOCLAIM`, umbral configurable de inactividad y cursor de continuación.
+  2. Alternar recuperación de pendientes con lectura de mensajes nuevos sin provocar starvation.
+  3. Procesar y confirmar cada mensaje por separado después de obtener resultado persistente.
+  4. Persistir payloads inválidos como rechazo durable con causa observable.
+  5. Cubrir caída entre lectura, persistencia y `XACK`, además del agotamiento de reintentos.
+- **Evidencia:** pendiente: pruebas de integración Redis, métricas y registro de ejecución.
+
+### TASK-CA-0002 — Aislar Persistencia E Idempotencia Por Evento
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-004`, `REQ-CA-009`, `REQ-CA-010`.
+- **Criterios:** `AC-CA-001`, `AC-CA-004`.
+- **Dependencias:** `TASK-CA-0001`.
+- **Acciones:**
+  1. Reemplazar el fallo transaccional de lote por resultados individuales clasificables.
+  2. Distinguir duplicado exacto, duplicado lógico, duplicado funcional y error no recuperable.
+  3. Confirmar como éxito idempotente los conflictos esperables y preservar los demás eventos del lote.
+  4. Mantener sin cambios el alcance de los índices existentes y preparar la unicidad tenant-first para sujetos.
+- **Evidencia:** pendiente: pruebas de conflictos concurrentes y regresión del repositorio de eventos.
+
+### TASK-CA-0003 — Agregar Flags, Configuración Y Migración `005`
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-001`, `REQ-CA-002`, `REQ-CA-003`, `REQ-CA-005`, `REQ-CA-015`.
+- **Criterios:** `AC-CA-001`, `AC-CA-006`, `AC-CA-028`.
+- **Dependencias:** `TASK-CA-0002`.
+- **Acciones:**
+  1. Crear la migración aditiva `005` con `event_source`, defaults compatibles y ajustes de idempotencia persistente.
+  2. Incorporar flags separados para endpoint interno, normalización, backfill, proyecciones, registro y API.
+  3. Mantener todos los flags apagados por defecto y validar combinaciones inválidas al iniciar.
+  4. Implementar `down` simétrico para desarrollo con advertencia explícita de pérdida de datos.
+- **Evidencia:** pendiente: pruebas up/down desde base vacía y versión `004`, y matriz de defaults.
+
+### TASK-CA-0004 — Extender El Resolver De Sites
+
+- **Estado:** `pending`
+- **Responsables:** GoAnalytics y proyecto principal.
+- **Requisitos:** `REQ-CA-013`, `REQ-CA-014`, `REQ-CA-015`.
+- **Criterios:** `AC-CA-005`, `AC-CA-006`.
+- **Dependencias:** `TASK-CA-0003`.
+- **Acciones:**
+  1. Extender de forma aditiva solicitud, respuesta, dominio y caché con `source` y `timezone` IANA.
+  2. Permitir resolución server-to-server sin `origin`; conservarla para tráfico web.
+  3. Validar zona horaria y definir error explícito cuando falte en capacidades que la requieran.
+  4. Mantener compatibilidad con resolvers que todavía no devuelvan los campos nuevos mientras los flags estén apagados.
+- **Evidencia:** pendiente: pruebas de contrato entre repositorios, caché y zonas horarias inválidas.
+
+### TASK-CA-0005 — Preparar Operación, Métricas Y Objetivos De Rendimiento
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-027`, `AC-CA-028`, `AC-CA-029`.
+- **Dependencias:** `TASK-CA-0003`.
+- **Acciones:**
+  1. Definir métricas, logs estructurados y dimensiones tenant-safe de los nuevos flujos.
+  2. Separar health de proceso y readiness de dependencias.
+  3. Preparar targets de build y despliegue independientes para worker, jobs y query API.
+  4. Construir el entorno de referencia y scripts repetibles para las metas de volumen del MVP.
+- **Evidencia:** pendiente: dashboards, alertas, runbooks y reporte de carga inicial.
+
+## 3. Fase 1 — Identidad, Normalización Y Lifecycle
+
+### TASK-CA-0101 — Crear Modelo De Sujetos Y Migración `006`
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-003`, `REQ-CA-018`, `REQ-CA-019`, `REQ-CA-020`, `REQ-CA-021`.
+- **Criterios:** `AC-CA-008`, `AC-CA-009`.
+- **Dependencias:** `TASK-CA-0003`.
+- **Acciones:**
+  1. Crear `analytics_subjects`, `analytics_event_subjects` y `analytics_subject_bootstrap`.
+  2. Aplicar identidad única `tenant_id + subject_type + external_subject_id` e índices tenant-first.
+  3. Incorporar estados, precedencia lifecycle, estado/motivo de normalización, revisión y timezone aplicadas.
+  4. Incorporar unicidades de asociación necesarias para convergencia y reprocesamiento.
+  5. Limitar el tipo habilitado a `customer` sin impedir extensiones aditivas futuras.
+- **Evidencia:** pendiente: migración up/down, restricciones e invariantes del dominio.
+
+### TASK-CA-0102 — Crear `POST /v1/internal/events`
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-011`, `REQ-CA-012`, `REQ-CA-013`, `REQ-CA-016`, `REQ-CA-017`.
+- **Criterios:** `AC-CA-005`, `AC-CA-007`, `AC-CA-020`.
+- **Dependencias:** `TASK-CA-0004`, `TASK-CA-0101`.
+- **Acciones:**
+  1. Agregar endpoint server-to-server con Bearer dedicado y respuesta `202`.
+  2. Definir perfiles canónicos no ambiguos para asociación y lifecycle con uno o varios sujetos.
+  3. No exigir sesión, navegación ni `origin`; exigir los campos del perfil server.
+  4. Publicar al mismo Redis Stream con `event_source=server` y sin alterar el endpoint web.
+  5. Aplicar límites de tamaño, validación estricta y errores estables.
+- **Evidencia:** pendiente: pruebas HTTP, contrato versionado y regresión de `POST /v1/events`.
+
+### TASK-CA-0103 — Propagar Origen, Zona Horaria Y Trazabilidad
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-012`, `REQ-CA-014`, `REQ-CA-015`, `REQ-CA-016`.
+- **Criterios:** `AC-CA-005`, `AC-CA-006`, `AC-CA-007`.
+- **Dependencias:** `TASK-CA-0102`.
+- **Acciones:**
+  1. Propagar `event_source`, tenant, site, timezone y claves de idempotencia por ingesta, stream y worker.
+  2. Guardar timezone y revisión aplicadas como snapshot reproducible.
+  3. Evitar que datos server relajen la validación de tráfico web.
+  4. Agregar trazas correlacionables sin registrar tokens ni identificadores personales innecesarios.
+- **Evidencia:** pendiente: pruebas end-to-end web/server y consultas de trazabilidad.
+
+### TASK-CA-0104 — Implementar Normalización 1:N Tenant-First
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-004`, `REQ-CA-016`, `REQ-CA-018`, `REQ-CA-019`, `REQ-CA-025`.
+- **Criterios:** `AC-CA-007`, `AC-CA-008`, `AC-CA-011`.
+- **Dependencias:** `TASK-CA-0101`, `TASK-CA-0103`.
+- **Acciones:**
+  1. Normalizar cero, uno o varios sujetos por evento manteniendo una sola fila cruda.
+  2. Crear sujetos desconocidos por interacción web y resolver asociaciones server-to-server.
+  3. Aplicar idempotencia funcional en todo el tenant aunque el hecho llegue desde distintos sites.
+  4. Persistir `normalization_status/reason` sin impedir el guardado del evento crudo.
+  5. Registrar revisión de contexto y timezone utilizadas.
+- **Evidencia:** pendiente: pruebas unitarias, entre sites, reprocesamiento y fallos semánticos.
+
+### TASK-CA-0105 — Implementar Lifecycle Monotónico Y Merge
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-020`, `REQ-CA-021`, `REQ-CA-022`, `REQ-CA-023`, `REQ-CA-024`.
+- **Criterios:** `AC-CA-009`, `AC-CA-010`.
+- **Dependencias:** `TASK-CA-0104`.
+- **Acciones:**
+  1. Ordenar mutaciones por `source_updated_at + source_mutation_id`.
+  2. Tratar `effective_at` como dato informativo.
+  3. Registrar como no-op auditable eventos antiguos o duplicados.
+  4. Conservar historia en el sujeto fusionado sin transferir conteos en el MVP.
+  5. Mantener solo `active` como estado elegible.
+- **Evidencia:** pendiente: pruebas fuera de orden, empates, duplicados, merge y elegibilidad.
+
+### TASK-CA-0106 — Emitir Asociaciones Y Lifecycle Desde El Proyecto Principal
+
+- **Estado:** `pending`
+- **Responsable:** proyecto principal.
+- **Requisitos:** `REQ-CA-060`, `REQ-CA-061`.
+- **Criterios:** `AC-CA-025`.
+- **Dependencias:** `TASK-CA-0102`, `TASK-CA-0105`.
+- **Acciones:**
+  1. Emitir solo después del commit de negocio.
+  2. Reutilizar una `idempotency_key` estable durante tres intentos con timeout y backoff exponencial.
+  3. No revertir la operación de negocio ante el fallo final.
+  4. Exponer métricas, log y correlación para reintento o análisis operativo.
+  5. Generar `source_mutation_id` monotónico y estable dentro de la fuente.
+- **Evidencia:** pendiente: pruebas de contrato y fallos simulados en el repositorio principal.
+
+## 4. Fase 2 — Backfill Y Elegibilidad
+
+### TASK-CA-0201 — Publicar Snapshot Revisionado En El Proyecto Principal
+
+- **Estado:** `pending`
+- **Responsable:** proyecto principal.
+- **Requisitos:** `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-028`, `REQ-CA-029`.
+- **Criterios:** `AC-CA-012`.
+- **Dependencias:** `TASK-CA-0106`.
+- **Acciones:**
+  1. Implementar `GET /internal/analytics/subjects/snapshot` con Bearer dedicado.
+  2. Devolver activos, inactivos y fusionados con cursor opaco y hasta 500 sujetos por página.
+  3. Mantener `source_revision` estable durante toda la lectura.
+  4. Responder `409 snapshot_revision_expired` cuando ya no pueda continuar la revisión.
+  5. Incluir lifecycle y precedencia suficiente para converger con eventos en vivo.
+- **Evidencia:** pendiente: contrato, pruebas paginadas, revisión expirada y reanudación.
+
+### TASK-CA-0202 — Crear Cliente De Snapshot Y Bootstrap En `subject-jobs`
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-028`, `REQ-CA-030`, `REQ-CA-031`.
+- **Criterios:** `AC-CA-012`, `AC-CA-013`.
+- **Dependencias:** `TASK-CA-0201`, `TASK-CA-0101`.
+- **Acciones:**
+  1. Implementar cliente autenticado, cursor, revisión y límites del snapshot.
+  2. Crear modo bootstrap del binario `cmd/subject-jobs`.
+  3. Persistir progreso por tenant y revisión para reanudar sin duplicar.
+  4. Reiniciar de forma controlada ante `snapshot_revision_expired`.
+  5. Aplicar timeouts, reintentos acotados y métricas de avance.
+- **Evidencia:** pendiente: pruebas con servidor simulado y reinicios del proceso.
+
+### TASK-CA-0203 — Hacer Converger Backfill, Lazy Creation Y Lifecycle
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-018`, `REQ-CA-020`, `REQ-CA-022`, `REQ-CA-023`, `REQ-CA-024`, `REQ-CA-029`, `REQ-CA-030`, `REQ-CA-031`.
+- **Criterios:** `AC-CA-009`, `AC-CA-010`, `AC-CA-013`.
+- **Dependencias:** `TASK-CA-0105`, `TASK-CA-0202`.
+- **Acciones:**
+  1. Resolver concurrencia mediante la identidad única y actualización monotónica.
+  2. Evitar degradar un estado más nuevo con datos atrasados del snapshot.
+  3. Registrar filas procesadas, no-op, errores recuperables y errores definitivos.
+  4. Verificar estados active, inactive y merged y la elegibilidad resultante.
+- **Evidencia:** pendiente: pruebas concurrentes entre asociación, lazy creation y backfill.
+
+### TASK-CA-0204 — Ejecutar Y Certificar El Backfill Inicial
+
+- **Estado:** `pending`
+- **Responsables:** GoAnalytics y proyecto principal.
+- **Requisitos:** `REQ-CA-030`, `REQ-CA-031`, `REQ-CA-064`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-013`, `AC-CA-027`, `AC-CA-029`.
+- **Dependencias:** `TASK-CA-0203`, `TASK-CA-0005`.
+- **Acciones:**
+  1. Ejecutar en entorno de referencia con hasta 100.000 sujetos.
+  2. Verificar completitud por estado, tenant y revisión.
+  3. Confirmar reanudación después de una interrupción y ausencia de duplicados.
+  4. Registrar duración, throughput, errores y decisión de habilitación de la fase siguiente.
+- **Evidencia:** pendiente: reporte firmado de backfill y checklist de gate.
+
+## 5. Fase 3 — Proyección Diaria Y Ranking Global
+
+### TASK-CA-0301 — Crear Migración `007` Y Repositorios De Proyección
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-003`, `REQ-CA-032`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`.
+- **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`.
+- **Dependencias:** `TASK-CA-0204`.
+- **Acciones:**
+  1. Crear ejecuciones, checkpoints y agregado diario global con claves `BIGSERIAL` y FKs explícitas.
+  2. Definir unicidades para reemplazo idempotente por tenant, día y sujeto.
+  3. Crear índices tenant-first para watermark, ventanas y ranking.
+  4. Incluir `association_count` y `last_association_at`.
+- **Evidencia:** pendiente: migración up/down, explain plans y pruebas de repositorios.
+
+### TASK-CA-0302 — Implementar Proyector Global Incremental
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`.
+- **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`.
+- **Dependencias:** `TASK-CA-0301`.
+- **Acciones:**
+  1. Tomar lock asesor PostgreSQL por ejecución compatible con una sola instancia efectiva.
+  2. Detectar cambios mediante watermark compuesto `updated_at + id`.
+  3. Recalcular días completos afectados y reemplazarlos atómicamente.
+  4. Agregar ventana global de 90 días solo para sujetos elegibles.
+  5. Avanzar checkpoint únicamente después de publicar agregados y ejecución exitosa.
+- **Evidencia:** pendiente: pruebas de tardíos, recomputación, crash y concurrencia.
+
+### TASK-CA-0303 — Programar Proyección En `subject-jobs`
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-064`.
+- **Criterios:** `AC-CA-014`, `AC-CA-027`.
+- **Dependencias:** `TASK-CA-0302`.
+- **Acciones:**
+  1. Incorporar modos bootstrap, resolución y proyección al binario separado.
+  2. Ejecutar cada 86.400 segundos y al iniciar si no existe ejecución vigente.
+  3. Exponer health, readiness, estado de última ejecución y cierre ordenado.
+  4. Evitar ejecuciones duplicadas ante múltiples réplicas mediante el lock PostgreSQL.
+- **Evidencia:** pendiente: prueba temporal acelerada, restart y despliegue independiente.
+
+### TASK-CA-0304 — Crear Query API Y Ranking Global
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-050`, `REQ-CA-051`, `REQ-CA-052`, `REQ-CA-053`, `REQ-CA-054`, `REQ-CA-055`, `REQ-CA-056`, `REQ-CA-057`, `REQ-CA-058`, `REQ-CA-059`.
+- **Criterios:** `AC-CA-020`, `AC-CA-021`, `AC-CA-022`, `AC-CA-023`, `AC-CA-024`.
+- **Dependencias:** `TASK-CA-0302`, `TASK-CA-0005`.
+- **Acciones:**
+  1. Crear `cmd/query-api` y `GET /v1/internal/subjects/suggestions` con Bearer dedicado.
+  2. Validar tenant, `subject_type`, límites y parámetros de contexto.
+  3. Ordenar por conteo, última asociación e ID externo; devolver solo IDs externos y trazabilidad.
+  4. Aplicar estados unavailable, stale, empty y aislamiento por tenant.
+  5. Servir stale por defecto dentro del contrato acordado y permitir desactivarlo.
+- **Evidencia:** pendiente: pruebas HTTP, seguridad, aislamiento y carga p95.
+
+### TASK-CA-0305 — Integrar Sugerencias Globales En El Proyecto Principal
+
+- **Estado:** `pending`
+- **Responsable:** proyecto principal.
+- **Requisitos:** `REQ-CA-062`, `REQ-CA-063`, `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-026`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029`.
+- **Dependencias:** `TASK-CA-0304`.
+- **Acciones:**
+  1. Consultar sugerencias globales bajo flag y con timeout acotado.
+  2. Recuperar datos reales del cliente en el proyecto principal y descartar sujetos ya no elegibles.
+  3. Definir experiencia degradada ante timeout, unavailable o lista vacía.
+  4. Activar progresivamente por tenant y medir latencia, stale y errores.
+- **Evidencia:** pendiente: prueba integrada, métricas y aprobación del rollout global.
+
+## 6. Fase 4 — Registro Y Ranking Contextual
+
+### TASK-CA-0401 — Publicar El Registro Desde El Proyecto Principal
+
+- **Estado:** `pending`
+- **Responsable:** proyecto principal.
+- **Requisitos:** `REQ-CA-040`, `REQ-CA-041`, `REQ-CA-042`, `REQ-CA-043`.
+- **Criterios:** `AC-CA-017`.
+- **Dependencias:** `TASK-CA-0305`.
+- **Acciones:**
+  1. Implementar `GET /internal/analytics/context-registry` con revisiones estables.
+  2. Publicar las siete familias MVP y definiciones inmutables por clave y versión.
+  3. Asociar estado activo/inactivo a una revisión concreta.
+  4. Rechazar ciclos, referencias inexistentes y mutaciones de una definición publicada.
+- **Evidencia:** pendiente: contrato, fixtures válidos/inválidos y pruebas de revisión.
+
+### TASK-CA-0402 — Crear Migración `008` Y Repositorio Revisionado
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-003`, `REQ-CA-040`, `REQ-CA-041`, `REQ-CA-042`, `REQ-CA-043`, `REQ-CA-044`, `REQ-CA-045`, `REQ-CA-046`.
+- **Criterios:** `AC-CA-017`, `AC-CA-018`.
+- **Dependencias:** `TASK-CA-0401`.
+- **Acciones:**
+  1. Crear revisiones, definiciones, pendientes no registrados y agregado diario contextual.
+  2. Aplicar inmutabilidad, unicidades e índices tenant-first.
+  3. Implementar carga memoria → Redis → PostgreSQL → proyecto principal.
+  4. Proteger refresh con lock Redis tokenizado y liberación compare-and-delete.
+  5. Conservar la última revisión válida cuando una nueva sea inválida.
+- **Evidencia:** pendiente: migración, pruebas de caché/lock y validación de revisiones.
+
+### TASK-CA-0403 — Resolver Contextos Durante La Normalización
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-016`, `REQ-CA-047`, `REQ-CA-048`.
+- **Criterios:** `AC-CA-007`, `AC-CA-019`.
+- **Dependencias:** `TASK-CA-0104`, `TASK-CA-0402`.
+- **Acciones:**
+  1. Resolver por `context_key + context_version` contra una revisión válida.
+  2. Guardar revisión y resultado de resolución en la asociación normalizada.
+  3. Enviar contextos desconocidos a pendientes y mantener su aporte global.
+  4. Excluir contextos desconocidos o inactivos del agregado contextual.
+- **Evidencia:** pendiente: pruebas de revisión histórica, desconocidos e inactivos.
+
+### TASK-CA-0404 — Resolver Históricos Iniciales De Forma Idempotente
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-049`.
+- **Criterios:** `AC-CA-015`, `AC-CA-019`.
+- **Dependencias:** `TASK-CA-0403`.
+- **Acciones:**
+  1. Incorporar modo de resolución inicial a `cmd/subject-jobs`.
+  2. Seleccionar solo filas previas sin revisión resuelta y procesarlas por páginas.
+  3. Persistir checkpoint reanudable y resultado idempotente.
+  4. Marcar días afectados para recomputación sin iniciar conciliación general.
+- **Evidencia:** pendiente: pruebas de reanudación, segunda ejecución no-op y conteos afectados.
+
+### TASK-CA-0405 — Implementar Proyección Contextual
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`, `REQ-CA-047`, `REQ-CA-048`, `REQ-CA-049`.
+- **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`, `AC-CA-019`.
+- **Dependencias:** `TASK-CA-0404`, `TASK-CA-0303`.
+- **Acciones:**
+  1. Calcular agregado contextual diario con ventana de 30 días.
+  2. Reutilizar lock, watermark, recomputación diaria y publicación atómica.
+  3. Aplicar elegibilidad y revisión histórica de cada asociación.
+  4. Mantener el agregado global independiente y disponible.
+- **Evidencia:** pendiente: pruebas de agregados, tardíos, cambios de revisión y rendimiento.
+
+### TASK-CA-0406 — Habilitar Ranking Contextual Y Fallback
+
+- **Estado:** `pending`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-052`, `REQ-CA-053`, `REQ-CA-054`, `REQ-CA-055`, `REQ-CA-056`, `REQ-CA-057`, `REQ-CA-058`, `REQ-CA-059`.
+- **Criterios:** `AC-CA-021`, `AC-CA-022`, `AC-CA-023`, `AC-CA-024`.
+- **Dependencias:** `TASK-CA-0405`, `TASK-CA-0304`.
+- **Acciones:**
+  1. Exigir `context_version` cuando exista `context_key`.
+  2. Resolver contexto exacto y aplicar como único fallback el ranking global del tenant.
+  3. Conservar orden determinista, límites, frescura y privacidad.
+  4. Exponer trazabilidad de fuente de resultado sin claves internas.
+- **Evidencia:** pendiente: pruebas exactas, fallback, sin datos, stale y aislamiento.
+
+### TASK-CA-0407 — Integrar Contextos Y Sugerencias En El Proyecto Principal
+
+- **Estado:** `pending`
+- **Responsable:** proyecto principal.
+- **Requisitos:** `REQ-CA-060`, `REQ-CA-061`, `REQ-CA-062`, `REQ-CA-063`, `REQ-CA-064`, `REQ-CA-065`.
+- **Criterios:** `AC-CA-025`, `AC-CA-026`, `AC-CA-027`, `AC-CA-028`.
+- **Dependencias:** `TASK-CA-0401`, `TASK-CA-0406`.
+- **Acciones:**
+  1. Emitir claves/versiones de contexto publicadas en las asociaciones.
+  2. Consultar sugerencias contextuales bajo flag y realizar hidratación local.
+  3. Aplicar fallback funcional del consumidor cuando GoAnalytics no esté disponible.
+  4. Activar por tenant, observar y documentar reversión mediante flags.
+- **Evidencia:** pendiente: recorrido end-to-end y aprobación de usuarios internos.
+
+### TASK-CA-0408 — Certificar El MVP Y Cerrar El Rollout
+
+- **Estado:** `pending`
+- **Responsables:** GoAnalytics y proyecto principal.
+- **Requisitos:** `REQ-CA-001`, `REQ-CA-002`, `REQ-CA-004`, `REQ-CA-005`, `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-001`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029`, `AC-CA-030`.
+- **Dependencias:** `TASK-CA-0407` y todas las tareas anteriores.
+- **Acciones:**
+  1. Ejecutar regresión completa de ingest, worker y SDK.
+  2. Ejecutar pruebas de migración, contrato, integración, concurrencia, recuperación y carga.
+  3. Verificar que todos los flags continúen permitiendo desactivar el MVP sin afectar contratos existentes.
+  4. Completar runbooks, alertas, evidencias y matriz final de trazabilidad.
+  5. Aprobar el gate del MVP o registrar explícitamente criterios pendientes.
+- **Evidencia:** pendiente: informe de aceptación, trazabilidad completa y acta de habilitación.
+
+## 7. Secuencia Crítica
+
+La ruta crítica mínima es:
+
+`TASK-CA-0001` → `TASK-CA-0002` → `TASK-CA-0003` → `TASK-CA-0101` → `TASK-CA-0102` → `TASK-CA-0104` → `TASK-CA-0105` → `TASK-CA-0201` → `TASK-CA-0202` → `TASK-CA-0203` → `TASK-CA-0204` → `TASK-CA-0301` → `TASK-CA-0302` → `TASK-CA-0304` → `TASK-CA-0305` → `TASK-CA-0401` → `TASK-CA-0402` → `TASK-CA-0403` → `TASK-CA-0404` → `TASK-CA-0405` → `TASK-CA-0406` → `TASK-CA-0407` → `TASK-CA-0408`.
+
+La preparación operativa puede avanzar en paralelo después de `TASK-CA-0003`, pero cada gate exige su evidencia antes de habilitar la fase siguiente.
