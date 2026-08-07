@@ -12,7 +12,7 @@
 
 ### TASK-CA-0001 — Recuperar Pendientes De Redis De Forma Segura
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-006`, `REQ-CA-007`, `REQ-CA-008`, `REQ-CA-010`.
 - **Criterios:** `AC-CA-002`, `AC-CA-003`.
@@ -23,7 +23,12 @@
   3. Procesar y confirmar cada mensaje por separado después de obtener resultado persistente.
   4. Persistir payloads inválidos como rechazo durable con causa observable.
   5. Cubrir caída entre lectura, persistencia y `XACK`, además del agotamiento de reintentos.
-- **Evidencia:** pendiente: pruebas de integración Redis, métricas y registro de ejecución.
+- **Evidencia:**
+  - `go test ./... -count=1` en `services/worker`: suite completa aprobada.
+  - `go vet ./...` en `services/worker`: análisis estático aprobado.
+  - `REDIS_INTEGRATION_ADDR=localhost:6379 go test ./internal/adapters/inbound/redisstream -run Integration -count=1 -v`: recuperación de un mensaje abandonado y protección de un mensaje activo aprobadas contra Redis real.
+  - Pruebas unitarias cubren lote mixto, aislamiento por mensaje, fallo del repositorio de rechazos, cursor de `XAUTOCLAIM`, delivery count y agotamiento en la quinta entrega.
+  - Los rechazos de transporte guardan ID de stream, delivery count, longitud y SHA-256; no persisten el payload crudo potencialmente sensible.
 
 ### TASK-CA-0002 — Aislar Persistencia E Idempotencia Por Evento
 

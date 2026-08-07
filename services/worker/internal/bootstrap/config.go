@@ -24,12 +24,17 @@ type Config struct {
 	AppName  string
 	LogLevel string
 
-	WorkerName          string
-	WorkerConsumerGroup string
-	WorkerBatchSize     int
-	WorkerPollInterval  time.Duration
-	HealthHTTPHost      string
-	HealthHTTPPort      int
+	WorkerName                  string
+	WorkerConsumerGroup         string
+	WorkerBatchSize             int
+	WorkerPollInterval          time.Duration
+	WorkerPendingClaimEnabled   bool
+	WorkerPendingMinIdle        time.Duration
+	WorkerPendingClaimInterval  time.Duration
+	WorkerPendingClaimBatchSize int
+	WorkerMaxDeliveries         int64
+	HealthHTTPHost              string
+	HealthHTTPPort              int
 
 	RedisAddr     string
 	RedisUsername string
@@ -70,11 +75,16 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		AppName:  getEnv("APP_NAME", "go-analytics"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),
 
-		WorkerName:          getEnv("WORKER_NAME", "go-analytics-worker-1"),
-		WorkerConsumerGroup: getEnv("WORKER_CONSUMER_GROUP", "go-analytics-workers"),
-		WorkerBatchSize:     500,
-		WorkerPollInterval:  time.Second,
-		HealthHTTPHost:      getEnv("WORKER_HEALTH_HTTP_HOST", "0.0.0.0"),
+		WorkerName:                  getEnv("WORKER_NAME", "go-analytics-worker-1"),
+		WorkerConsumerGroup:         getEnv("WORKER_CONSUMER_GROUP", "go-analytics-workers"),
+		WorkerBatchSize:             500,
+		WorkerPollInterval:          time.Second,
+		WorkerPendingClaimEnabled:   true,
+		WorkerPendingMinIdle:        60 * time.Second,
+		WorkerPendingClaimInterval:  30 * time.Second,
+		WorkerPendingClaimBatchSize: 100,
+		WorkerMaxDeliveries:         5,
+		HealthHTTPHost:              getEnv("WORKER_HEALTH_HTTP_HOST", "0.0.0.0"),
 
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisUsername: getEnv("REDIS_USERNAME", ""),
@@ -111,6 +121,23 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.WorkerPollInterval, err = getEnvMillis("WORKER_POLL_INTERVAL_MS", config.WorkerPollInterval); err != nil {
 		return Config{}, err
 	}
+	if config.WorkerPendingClaimEnabled, err = getEnvBool("WORKER_PENDING_CLAIM_ENABLED", config.WorkerPendingClaimEnabled); err != nil {
+		return Config{}, err
+	}
+	if config.WorkerPendingMinIdle, err = getEnvMillis("WORKER_PENDING_MIN_IDLE_MS", config.WorkerPendingMinIdle); err != nil {
+		return Config{}, err
+	}
+	if config.WorkerPendingClaimInterval, err = getEnvMillis("WORKER_PENDING_CLAIM_INTERVAL_MS", config.WorkerPendingClaimInterval); err != nil {
+		return Config{}, err
+	}
+	if config.WorkerPendingClaimBatchSize, err = getEnvInt("WORKER_PENDING_CLAIM_BATCH_SIZE", config.WorkerPendingClaimBatchSize); err != nil {
+		return Config{}, err
+	}
+	maxDeliveries, err := getEnvInt("WORKER_MAX_DELIVERIES", int(config.WorkerMaxDeliveries))
+	if err != nil {
+		return Config{}, err
+	}
+	config.WorkerMaxDeliveries = int64(maxDeliveries)
 	if config.HealthHTTPPort, err = getEnvInt("WORKER_HEALTH_HTTP_PORT", 8081); err != nil {
 		return Config{}, err
 	}
@@ -207,6 +234,22 @@ func getEnvInt(key string, fallback int) (int, error) {
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
 		return 0, fmt.Errorf("%s invalido: %w", key, err)
+	}
+	return parsed, nil
+}
+
+// getEnvBool obtiene una variable booleana con fallback.
+//
+// Recibe nombre y valor por defecto. Devuelve el booleano interpretado por
+// strconv.ParseBool o error cuando el contenido configurado no es valido.
+func getEnvBool(key string, fallback bool) (bool, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s invalido: %w", key, err)
 	}
 	return parsed, nil
 }

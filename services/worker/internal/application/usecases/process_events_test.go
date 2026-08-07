@@ -512,6 +512,51 @@ func TestProcessReturnsPersistenceErrors(t *testing.T) {
 	}
 }
 
+func TestRecordStreamRejectionStoresOnlySafePayloadMetadata(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRejectedRepository{}
+	useCase := &ProcessEventsUseCase{rejectedRepository: repository, clock: fakeClock{now: now}}
+
+	err := useCase.RecordStreamRejection(context.Background(), dto.StreamRejection{
+		StreamID:      "1-0",
+		EventID:       "evt-1",
+		SiteCode:      "site-1",
+		Environment:   "production",
+		Reason:        rejection.ReasonInvalidStreamPayload,
+		Payload:       `{"password":"no-persistir"}`,
+		DeliveryCount: 2,
+	})
+	if err != nil {
+		t.Fatalf("RecordStreamRejection() error = %v", err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("rechazos = %d, want 1", len(repository.events))
+	}
+	got := repository.events[0]
+	if got.EventID != "evt-1" || got.Reason != rejection.ReasonInvalidStreamPayload || !got.CreatedAt.Equal(now) {
+		t.Fatalf("rechazo = %#v", got)
+	}
+	if _, exists := got.RawPayload["payload"]; exists {
+		t.Fatalf("payload crudo no debe persistirse")
+	}
+	if got.RawPayload["payload_sha256"] == "" || got.RawPayload["payload_bytes"] != len([]byte(`{"password":"no-persistir"}`)) {
+		t.Fatalf("metadata segura = %#v", got.RawPayload)
+	}
+}
+
+func TestRecordStreamRejectionReturnsPersistenceError(t *testing.T) {
+	repository := &fakeRejectedRepository{err: errors.New("postgres no disponible")}
+	useCase := &ProcessEventsUseCase{rejectedRepository: repository, clock: fakeClock{now: time.Now()}}
+
+	err := useCase.RecordStreamRejection(context.Background(), dto.StreamRejection{
+		Reason:  rejection.ReasonStreamRetryExhausted,
+		Payload: "{}",
+	})
+	if !errors.Is(err, ErrPersistRejectedFailed) {
+		t.Fatalf("error = %v, want ErrPersistRejectedFailed", err)
+	}
+}
+
 func newTestProcessUseCase(
 	now time.Time,
 	eventRepository *fakeEventRepository,

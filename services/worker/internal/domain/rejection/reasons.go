@@ -18,6 +18,8 @@ const (
 	ReasonSensitivePayload       = "sensitive_payload"
 	ReasonPayloadTooLarge        = "payload_too_large"
 	ReasonBlockedKey             = "blocked_key"
+	ReasonInvalidStreamPayload   = "invalid_stream_payload"
+	ReasonStreamRetryExhausted   = "stream_retry_exhausted"
 
 	SeverityWarning    = "warning"
 	SeveritySuspicious = "suspicious"

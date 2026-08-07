@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
@@ -196,6 +197,43 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 				return fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 			}
 		}
+	}
+	return nil
+}
+
+// RecordStreamRejection persiste el rechazo durable de un mensaje de stream.
+//
+// Recibe contexto y dto.StreamRejection con identificadores opcionales,
+// motivo, payload y cantidad de entregas. Devuelve error cuando faltan las
+// dependencias requeridas, el motivo no pertenece al contrato de transporte o
+// PostgreSQL no puede guardar el rechazo.
+//
+// El payload no se almacena: se conserva solamente su hash SHA-256, longitud y
+// metadata operativa para evitar exponer contenido que no pudo validarse.
+func (uc *ProcessEventsUseCase) RecordStreamRejection(ctx context.Context, input dto.StreamRejection) error {
+	if uc == nil || uc.rejectedRepository == nil || uc.clock == nil {
+		return ErrProcessDependencyMissing
+	}
+	if input.Reason != rejection.ReasonInvalidStreamPayload && input.Reason != rejection.ReasonStreamRetryExhausted {
+		return fmt.Errorf("motivo de rechazo de stream invalido: %s", input.Reason)
+	}
+	payloadHash := sha256.Sum256([]byte(input.Payload))
+	rejected := rejection.RejectedEvent{
+		EventID:     input.EventID,
+		SiteCode:    input.SiteCode,
+		Environment: input.Environment,
+		Reason:      input.Reason,
+		Severity:    rejection.SeverityWarning,
+		RawPayload: map[string]any{
+			"stream_id":      input.StreamID,
+			"delivery_count": input.DeliveryCount,
+			"payload_bytes":  len([]byte(input.Payload)),
+			"payload_sha256": fmt.Sprintf("%x", payloadHash),
+		},
+		CreatedAt: uc.clock.Now(),
+	}
+	if err := uc.rejectedRepository.SaveBatch(ctx, []rejection.RejectedEvent{rejected}); err != nil {
+		return fmt.Errorf("%w: %v", ErrPersistRejectedFailed, err)
 	}
 	return nil
 }

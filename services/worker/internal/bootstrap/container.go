@@ -104,11 +104,16 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		config.SemanticDedupRules,
 	)
 	consumer, err := redisstream.NewConsumer(redisClient, redisstream.Config{
-		StreamName:   config.EventStreamName,
-		GroupName:    config.WorkerConsumerGroup,
-		ConsumerName: config.WorkerName,
-		BatchSize:    config.WorkerBatchSize,
-		PollInterval: config.WorkerPollInterval,
+		StreamName:            config.EventStreamName,
+		GroupName:             config.WorkerConsumerGroup,
+		ConsumerName:          config.WorkerName,
+		BatchSize:             config.WorkerBatchSize,
+		PollInterval:          config.WorkerPollInterval,
+		PendingClaimEnabled:   config.WorkerPendingClaimEnabled,
+		PendingMinIdle:        config.WorkerPendingMinIdle,
+		PendingClaimInterval:  config.WorkerPendingClaimInterval,
+		PendingClaimBatchSize: config.WorkerPendingClaimBatchSize,
+		MaxDeliveries:         config.WorkerMaxDeliveries,
 	}, process, appLogger)
 	if err != nil {
 		return nil, err
