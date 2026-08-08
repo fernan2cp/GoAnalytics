@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Errores de dominio para validar metadata de site.
@@ -11,15 +12,24 @@ import (
 // Permiten que la capa de aplicacion registre rechazos con motivos estables sin
 // importar detalles de cache, resolver interno ni almacenamiento.
 var (
-	ErrInvalidConfig    = errors.New("metadata de site invalida")
-	ErrSiteInactive     = errors.New("site inactivo")
-	ErrTrackingDisabled = errors.New("tracking deshabilitado")
-	ErrTokenVersion     = errors.New("version de token invalida")
-	ErrDomainNotAllowed = errors.New("dominio no permitido")
-	ErrEnvironmentEmpty = errors.New("entorno vacio")
+	ErrInvalidConfig      = errors.New("metadata de site invalida")
+	ErrSiteInactive       = errors.New("site inactivo")
+	ErrTrackingDisabled   = errors.New("tracking deshabilitado")
+	ErrTokenVersion       = errors.New("version de token invalida")
+	ErrDomainNotAllowed   = errors.New("dominio no permitido")
+	ErrEnvironmentEmpty   = errors.New("entorno vacio")
+	ErrInvalidSource      = errors.New("origen de evento invalido")
+	ErrTimezoneUnresolved = errors.New("zona horaria IANA no resuelta")
 )
 
 const activeStatus = "active"
+
+const (
+	// SourceWeb identifica resoluciones originadas por el endpoint publico.
+	SourceWeb = "web"
+	// SourceServer identifica resoluciones server-to-server sin navegacion.
+	SourceServer = "server"
+)
 
 // ValidateConfig valida que la metadata de site tenga datos minimos usables.
 //
@@ -68,6 +78,16 @@ func ValidateConfig(config SiteConfig) error {
 // Debe usarse desde application despues de obtener metadata valida. No conoce
 // Redis, HTTP ni base de datos.
 func ValidateForEvent(config SiteConfig, eventSiteCode string, environment string, tokenVersion int, origin string) error {
+	return ValidateForEventSource(config, eventSiteCode, environment, tokenVersion, origin, SourceWeb)
+}
+
+// ValidateForEventSource valida metadata segun el origen del evento.
+//
+// Source vacio equivale a web. Para web conserva validacion de token y dominio;
+// para server permite origin vacio y no exige token de tracking. Ambos origenes
+// validan identidad, estado, tracking y entorno. Devuelve ErrInvalidSource para
+// cualquier valor fuera del contrato.
+func ValidateForEventSource(config SiteConfig, eventSiteCode string, environment string, tokenVersion int, origin string, source string) error {
 	if err := ValidateConfig(config); err != nil {
 		return err
 	}
@@ -83,11 +103,48 @@ func ValidateForEvent(config SiteConfig, eventSiteCode string, environment strin
 	if !config.TrackingEnabled {
 		return ErrTrackingDisabled
 	}
-	if config.TokenVersion != tokenVersion {
-		return ErrTokenVersion
+	source, valid := NormalizeSource(source)
+	if !valid {
+		return ErrInvalidSource
 	}
-	if !AllowsOrigin(config, origin) {
-		return ErrDomainNotAllowed
+	if source == SourceWeb {
+		if config.TokenVersion != tokenVersion {
+			return ErrTokenVersion
+		}
+		if !AllowsOrigin(config, origin) {
+			return ErrDomainNotAllowed
+		}
+	}
+	return nil
+}
+
+// NormalizeSource normaliza el origen de resolucion del site.
+//
+// La cadena vacia se interpreta como web para conservar llamadas legacy.
+// Devuelve el valor canonico y false si no pertenece al contrato web/server.
+func NormalizeSource(source string) (string, bool) {
+	normalized := strings.ToLower(strings.TrimSpace(source))
+	if normalized == "" {
+		return SourceWeb, true
+	}
+	if normalized != SourceWeb && normalized != SourceServer {
+		return "", false
+	}
+	return normalized, true
+}
+
+// ValidateTimezone verifica que SiteConfig contenga una zona horaria IANA.
+//
+// La ausencia y los identificadores que time.LoadLocation no reconoce devuelven
+// ErrTimezoneUnresolved. Esta validacion es opt-in: ValidateConfig sigue
+// aceptando metadata legacy sin timezone para no afectar el procesamiento web.
+func ValidateTimezone(config SiteConfig) error {
+	value := strings.TrimSpace(config.Timezone)
+	if value == "" {
+		return ErrTimezoneUnresolved
+	}
+	if _, err := time.LoadLocation(value); err != nil {
+		return ErrTimezoneUnresolved
 	}
 	return nil
 }

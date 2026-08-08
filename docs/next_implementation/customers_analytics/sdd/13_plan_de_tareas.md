@@ -60,7 +60,7 @@
 
 ### TASK-CA-0004 — Extender El Resolver De Sites
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsables:** GoAnalytics y proyecto principal.
 - **Requisitos:** `REQ-CA-013`, `REQ-CA-014`, `REQ-CA-015`.
 - **Criterios:** `AC-CA-005`, `AC-CA-006`.
@@ -70,7 +70,7 @@
   2. Permitir resolución server-to-server sin `origin`; conservarla para tráfico web.
   3. Validar zona horaria y definir error explícito cuando falte en capacidades que la requieran.
   4. Mantener compatibilidad con resolvers que todavía no devuelvan los campos nuevos mientras los flags estén apagados.
-- **Evidencia:** pendiente: pruebas de contrato entre repositorios, caché y zonas horarias inválidas.
+- **Evidencia:** GoAnalytics propaga `source`, conserva source vacío como web, permite server sin origin/token de tracking, mantiene las claves Redis web legacy, aísla claves server y conserva payloads cacheados sin timezone. `ValidateTimezone` distingue zona IANA válida de `timezone_unresolved`. En DragonFullAV, commit `4bcf56d13` extiende el resolver, lee `site.timezone` con degradación segura y aporta 5 pruebas focales aprobadas. `make test`, `go vet ./...` del worker y las 16 pruebas del SDK aprobaron. La suite backend general se ejecutó con `--maxfail=1`: 12 pruebas pasaron y se detuvo por un fallo ajeno en `test_expenses_repository.py`, cuyo fixture SQLite omite la columna preexistente `users.avatar_url`.
 
 ### TASK-CA-0005 — Preparar Operación, Métricas Y Objetivos De Rendimiento
 

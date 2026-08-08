@@ -87,6 +87,7 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 		Origin:       input.Origin,
 		Environment:  input.Environment,
 		TokenVersion: input.TokenVersion,
+		Source:       input.Source,
 	})
 	if err != nil {
 		return site.SiteConfig{}, err
@@ -192,6 +193,7 @@ type resolveRequest struct {
 	Origin       string `json:"origin"`
 	Environment  string `json:"env"`
 	TokenVersion int    `json:"token_version"`
+	Source       string `json:"source,omitempty"`
 }
 
 type resolveResponse struct {
@@ -204,6 +206,7 @@ type resolveResponse struct {
 	TokenVersion    int      `json:"token_version"`
 	SampleRate      float64  `json:"sample_rate"`
 	SchemaVersion   int      `json:"schema_version"`
+	Timezone        string   `json:"timezone"`
 	Error           string   `json:"error"`
 }
 
@@ -230,5 +233,6 @@ func (payload resolveResponse) toDomain(input outbound.ResolveSiteInput) site.Si
 		TokenVersion:    tokenVersion,
 		SampleRate:      sampleRate,
 		SchemaVersion:   schemaVersion,
+		Timezone:        strings.TrimSpace(payload.Timezone),
 	}
 }

@@ -67,9 +67,10 @@ func NewRehydrateSiteUseCase(
 
 // Rehydrate resuelve y cachea metadata de site.
 //
-// Recibe contexto y clave de cache con site_code, origin, entorno y
-// token_version. Devuelve site.SiteConfig cuando el resolver responde metadata
-// valida y esta puede guardarse en cache.
+// Recibe contexto y clave de cache con site_code, origin, entorno,
+// token_version y source. Devuelve site.SiteConfig cuando el resolver responde
+// metadata valida y esta puede guardarse en cache. Source vacio equivale a web;
+// source server no exige origin ni token de tracking.
 //
 // Devuelve ErrRehydrateInputInvalid para entradas incompletas,
 // ErrSiteResolveFailed para fallas del resolver y errores de dominio o cache
@@ -78,10 +79,11 @@ func (uc *RehydrateSiteUseCase) Rehydrate(ctx context.Context, key outbound.Site
 	if uc == nil || uc.siteResolver == nil || uc.siteCache == nil {
 		return site.SiteConfig{}, ErrRehydrateDependencyMissing
 	}
-	if strings.TrimSpace(key.SiteCode) == "" ||
-		strings.TrimSpace(key.Origin) == "" ||
-		strings.TrimSpace(key.Environment) == "" ||
-		key.TokenVersion <= 0 {
+	source, validSource := site.NormalizeSource(key.Source)
+	if strings.TrimSpace(key.SiteCode) == "" || strings.TrimSpace(key.Environment) == "" || !validSource {
+		return site.SiteConfig{}, ErrRehydrateInputInvalid
+	}
+	if source == site.SourceWeb && (strings.TrimSpace(key.Origin) == "" || key.TokenVersion <= 0) {
 		return site.SiteConfig{}, ErrRehydrateInputInvalid
 	}
 
@@ -90,6 +92,7 @@ func (uc *RehydrateSiteUseCase) Rehydrate(ctx context.Context, key outbound.Site
 		Origin:       key.Origin,
 		Environment:  key.Environment,
 		TokenVersion: key.TokenVersion,
+		Source:       source,
 	})
 	if err != nil {
 		return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteResolveFailed, err)

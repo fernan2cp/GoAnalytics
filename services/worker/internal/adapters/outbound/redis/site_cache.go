@@ -106,14 +106,19 @@ func (cache *SiteCache) MarkNotFound(ctx context.Context, siteCode string) error
 // siteCacheKey construye la clave Redis de metadata.
 //
 // Recibe una clave compuesta y devuelve la clave estable documentada para
-// resolver por site_code, origin, env y token_version sin exponer el origin
-// completo en Redis.
+// resolver por site_code, origin, env, token_version y source sin exponer el
+// origin completo en Redis. Source web o vacio conserva la clave legacy;
+// server usa un sufijo aislado para no reutilizar validaciones de navegador.
 func siteCacheKey(key outbound.SiteCacheKey) string {
-	return siteCachePrefix +
+	cacheKey := siteCachePrefix +
 		strings.TrimSpace(key.SiteCode) +
 		":env:" + strings.TrimSpace(key.Environment) +
 		":tv:" + strconv.Itoa(key.TokenVersion) +
 		":origin:" + originHash(key.Origin)
+	if source, valid := site.NormalizeSource(key.Source); valid && source == site.SourceServer {
+		cacheKey += ":source:" + source
+	}
+	return cacheKey
 }
 
 // negativeCacheKey construye la clave Redis de negative cache.
@@ -145,6 +150,7 @@ type sitePayload struct {
 	TokenVersion    int      `json:"token_version"`
 	SampleRate      float64  `json:"sample_rate"`
 	SchemaVersion   int      `json:"schema_version"`
+	Timezone        string   `json:"timezone,omitempty"`
 }
 
 func (payload sitePayload) toDomain() site.SiteConfig {
@@ -158,6 +164,7 @@ func (payload sitePayload) toDomain() site.SiteConfig {
 		TokenVersion:    payload.TokenVersion,
 		SampleRate:      payload.SampleRate,
 		SchemaVersion:   payload.SchemaVersion,
+		Timezone:        payload.Timezone,
 	}
 }
 
@@ -172,5 +179,6 @@ func sitePayloadFromDomain(config site.SiteConfig) sitePayload {
 		TokenVersion:    config.TokenVersion,
 		SampleRate:      config.SampleRate,
 		SchemaVersion:   config.SchemaVersion,
+		Timezone:        config.Timezone,
 	}
 }

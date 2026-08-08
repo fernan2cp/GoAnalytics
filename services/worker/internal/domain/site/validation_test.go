@@ -1,6 +1,9 @@
 package site
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestAllowsOriginNormalizesSchemeWWWAndPort(t *testing.T) {
 	tests := []struct {
@@ -51,5 +54,62 @@ func TestAllowsOriginNormalizesSchemeWWWAndPort(t *testing.T) {
 				t.Fatalf("AllowsOrigin() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateForEventSourceAllowsServerWithoutNavigation(t *testing.T) {
+	config := validSiteConfig()
+
+	if err := ValidateForEventSource(config, config.SiteCode, "production", 0, "", SourceServer); err != nil {
+		t.Fatalf("ValidateForEventSource() error = %v", err)
+	}
+}
+
+func TestValidateForEventSourceKeepsWebRules(t *testing.T) {
+	config := validSiteConfig()
+
+	if err := ValidateForEventSource(config, config.SiteCode, "production", config.TokenVersion, "", ""); !errors.Is(err, ErrDomainNotAllowed) {
+		t.Fatalf("ValidateForEventSource() error = %v, want ErrDomainNotAllowed", err)
+	}
+	if err := ValidateForEventSource(config, config.SiteCode, "production", config.TokenVersion, "https://example.com", "mobile"); !errors.Is(err, ErrInvalidSource) {
+		t.Fatalf("ValidateForEventSource() error = %v, want ErrInvalidSource", err)
+	}
+}
+
+func TestValidateTimezoneRequiresValidIANAName(t *testing.T) {
+	tests := []struct {
+		name     string
+		timezone string
+		wantErr  bool
+	}{
+		{name: "valida", timezone: "America/Argentina/Buenos_Aires"},
+		{name: "ausente", timezone: "", wantErr: true},
+		{name: "invalida", timezone: "Mars/Olympus", wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateTimezone(SiteConfig{Timezone: test.timezone})
+			if test.wantErr && !errors.Is(err, ErrTimezoneUnresolved) {
+				t.Fatalf("ValidateTimezone() error = %v, want ErrTimezoneUnresolved", err)
+			}
+			if !test.wantErr && err != nil {
+				t.Fatalf("ValidateTimezone() error = %v", err)
+			}
+		})
+	}
+}
+
+func validSiteConfig() SiteConfig {
+	return SiteConfig{
+		SiteCode:        "site-code",
+		TenantID:        "tenant-1",
+		SiteID:          "site-1",
+		Status:          "active",
+		TrackingEnabled: true,
+		AllowedDomains:  []string{"example.com"},
+		TokenVersion:    1,
+		SampleRate:      1,
+		SchemaVersion:   2,
 	}
 }

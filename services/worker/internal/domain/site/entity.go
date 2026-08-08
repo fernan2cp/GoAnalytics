@@ -4,7 +4,8 @@ package site
 //
 // Contiene identidad interna, estado, dominios permitidos, version de token y
 // parametros de muestreo. Se usa como tipo de dominio obtenido desde cache o
-// resolver interno.
+// resolver interno. Timezone contiene una zona IANA cuando la fuente puede
+// proveerla; permanece vacia al leer contratos o entradas de cache legacy.
 //
 // Debe provenir de Redis o del SiteResolver y estar alineado con el contrato
 // documentado. No devuelve errores por si mismo; las fallas aparecen al
@@ -19,4 +20,5 @@ type SiteConfig struct {
 	TokenVersion    int
 	SampleRate      float64
 	SchemaVersion   int
+	Timezone        string
 }
