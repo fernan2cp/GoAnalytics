@@ -653,6 +653,40 @@ func newProcessUseCaseWithPorts(
 	)
 }
 
+func TestProcessPublishesPersistenceOutcomeMetric(t *testing.T) {
+	now := time.Now()
+	eventRepository := &fakeEventRepository{status: outbound.EventPersistenceDuplicateLogical}
+	rejectedRepository := &fakeRejectedRepository{}
+	cache := &fakeSiteCache{config: cachedSite(), found: true}
+	resolver := &fakeSiteResolver{config: cachedSite()}
+	deduplicator := &fakeDeduplicator{}
+	metrics := &processMetricsFake{counters: map[string]int{}}
+	useCase := NewProcessEventsUseCaseWithMetrics(
+		nil, eventRepository, rejectedRepository, cache, resolver, deduplicator,
+		fakeClock{now: now}, nil, RehydrateSiteOptions{}, nil, metrics,
+	)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{validRawEvent()}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	key := outbound.MetricEventPersistence + ":duplicate_logical"
+	if metrics.counters[key] != 1 {
+		t.Fatalf("metricas = %#v", metrics.counters)
+	}
+}
+
+type processMetricsFake struct {
+	counters map[string]int
+}
+
+func (fake *processMetricsFake) IncrementCounter(name string, labels map[string]string) {
+	fake.counters[name+":"+labels["outcome"]]++
+}
+
+func (fake *processMetricsFake) SetGauge(_ string, _ float64, _ map[string]string) {}
+
+func (fake *processMetricsFake) ObserveHistogram(_ string, _ float64, _ map[string]string) {}
+
 func validRawEvent() dto.RawEvent {
 	eventTime := time.Date(2026, 5, 5, 11, 59, 0, 0, time.UTC)
 	receivedAt := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)

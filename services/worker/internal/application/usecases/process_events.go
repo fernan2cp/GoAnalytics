@@ -44,6 +44,7 @@ type ProcessEventsUseCase struct {
 	logger             outbound.Logger
 	validateSite       *ValidateSiteUseCase
 	semanticRules      []SemanticDedupRule
+	metrics            outbound.Metrics
 }
 
 // NewProcessEventsUseCase crea el caso de uso de procesamiento de eventos.
@@ -97,6 +98,30 @@ func NewProcessEventsUseCaseWithOptions(
 	rehydrateOptions RehydrateSiteOptions,
 	semanticRules []SemanticDedupRule,
 ) *ProcessEventsUseCase {
+	return NewProcessEventsUseCaseWithMetrics(
+		consumer, eventRepository, rejectedRepository, siteCache, siteResolver,
+		deduplicator, clock, logger, rehydrateOptions, semanticRules, nil,
+	)
+}
+
+// NewProcessEventsUseCaseWithMetrics crea el caso de uso con observabilidad.
+//
+// Conserva las opciones de rehidratación y deduplicación e incorpora un puerto
+// opcional de métricas. Un puerto nil desactiva observaciones sin afectar el
+// resultado funcional.
+func NewProcessEventsUseCaseWithMetrics(
+	consumer outbound.EventConsumer,
+	eventRepository outbound.EventRepository,
+	rejectedRepository outbound.RejectedEventRepository,
+	siteCache outbound.SiteCache,
+	siteResolver outbound.SiteResolver,
+	deduplicator outbound.Deduplicator,
+	clock outbound.Clock,
+	logger outbound.Logger,
+	rehydrateOptions RehydrateSiteOptions,
+	semanticRules []SemanticDedupRule,
+	metrics outbound.Metrics,
+) *ProcessEventsUseCase {
 	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, rehydrateOptions)
 	return &ProcessEventsUseCase{
 		consumer:           consumer,
@@ -109,6 +134,7 @@ func NewProcessEventsUseCaseWithOptions(
 		logger:             logger,
 		validateSite:       NewValidateSiteUseCase(siteCache, rehydrateSite),
 		semanticRules:      semanticRules,
+		metrics:            metrics,
 	}
 }
 
@@ -200,18 +226,21 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		for index, result := range results {
 			valid := validEvents[index]
 			if result.EventID != valid.EventID {
+				uc.recordPersistenceOutcome("invalid_result")
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%w: resultado fuera de orden para %s", ErrPersistValidEventsFailed, valid.EventID)
 				}
 				continue
 			}
 			if result.Err != nil {
+				uc.recordPersistenceOutcome("error")
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, result.Err)
 				}
 				continue
 			}
 			if result.Status == outbound.EventPersistenceConflict {
+				uc.recordPersistenceOutcome(string(result.Status))
 				rejected := uc.buildRejectedEvent(rawByEventID[valid.EventID], rejection.ReasonIdempotencyConflict, rejection.SeverityWarning, valid.DedupStrategy)
 				rejected.RawPayload["conflict_field"] = result.ConflictField
 				rejected.RawPayload["existing_event_id"] = result.ExistingEventID
@@ -219,11 +248,13 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 				continue
 			}
 			if !result.IsIdempotentSuccess() {
+				uc.recordPersistenceOutcome("unknown")
 				if firstErr == nil {
 					firstErr = fmt.Errorf("%w: estado desconocido %q", ErrPersistValidEventsFailed, result.Status)
 				}
 				continue
 			}
+			uc.recordPersistenceOutcome(string(result.Status))
 			if err := uc.markDeduplicationKeys(ctx, valid); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 			}
@@ -238,6 +269,13 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		}
 	}
 	return nil
+}
+
+// recordPersistenceOutcome registra un resultado durable con labels acotados.
+func (uc *ProcessEventsUseCase) recordPersistenceOutcome(outcome string) {
+	if uc != nil && uc.metrics != nil {
+		uc.metrics.IncrementCounter(outbound.MetricEventPersistence, map[string]string{"outcome": outcome})
+	}
 }
 
 // RecordStreamRejection persiste el rechazo durable de un mensaje de stream.

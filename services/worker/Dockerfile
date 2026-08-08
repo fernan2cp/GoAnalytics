@@ -11,7 +11,8 @@ RUN go mod download
 WORKDIR /src
 COPY services/worker ./services/worker
 WORKDIR /src/services/worker
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/go-analytics-worker ./cmd/worker
+ARG WORKER_COMMAND=worker
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/go-analytics-worker ./cmd/${WORKER_COMMAND}
 
 FROM alpine:3.20
 

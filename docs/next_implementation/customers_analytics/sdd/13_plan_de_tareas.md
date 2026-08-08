@@ -74,7 +74,7 @@
 
 ### TASK-CA-0005 — Preparar Operación, Métricas Y Objetivos De Rendimiento
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
 - **Criterios:** `AC-CA-027`, `AC-CA-028`, `AC-CA-029`.
@@ -84,7 +84,7 @@
   2. Separar health de proceso y readiness de dependencias.
   3. Preparar targets de build y despliegue independientes para worker, jobs y query API.
   4. Construir el entorno de referencia y scripts repetibles para las metas de volumen del MVP.
-- **Evidencia:** pendiente: dashboards, alertas, runbooks y reporte de carga inicial.
+- **Evidencia:** el worker expone `/health`, `/ready` y `/metrics` por rutas separadas; el puerto de métricas y los adaptadores no-op/Prometheus mantienen domain libre de infraestructura y rechazan nombres/labels fuera del catálogo. Se instrumentaron PEL, `XAUTOCLAIM`, retry agotado y resultados de persistencia. El dashboard Grafana, 6 reglas validadas por `promtool`, runbook y perfil determinista de 20 tenants/100.000 sujetos/500.000 eventos quedaron versionados. El Dockerfile parametrizable construyó `worker` y dejó targets independientes para los futuros comandos. `make test`, `go vet ./...` y 16 pruebas SDK aprobaron. Esta tarea prepara `AC-CA-027` y `AC-CA-029`; la certificación de flujos y carga permanece trazada a `TASK-CA-0204`, `TASK-CA-0304`, `TASK-CA-0305`, `TASK-CA-0407` y `TASK-CA-0408`.
 
 ## 3. Fase 1 — Identidad, Normalización Y Lifecycle
 

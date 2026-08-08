@@ -9,6 +9,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"goanalytics/services/worker/internal/application/dto"
+	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/domain/rejection"
 )
 
@@ -163,6 +164,35 @@ func newTestConsumer(t *testing.T, client streamClient, processor eventProcessor
 	return consumer
 }
 
+func TestConsumerPublishesPendingAutoclaimAndExhaustedMetrics(t *testing.T) {
+	client := newFakeStreamClient()
+	client.pendingCount = 3
+	client.claims = []fakeClaimResult{{
+		messages: []goredis.XMessage{{ID: "1-0", Values: map[string]any{"payload": `{}`}}},
+		next:     "0-0",
+	}}
+	client.pending["1-0"] = 5
+	processor := &fakeEventProcessor{}
+	metrics := &fakeMetrics{counters: map[string]int{}, gauges: map[string]float64{}}
+	consumer, err := NewConsumerWithMetrics(client, Config{
+		StreamName: "events", GroupName: "workers", ConsumerName: "worker-1",
+		PendingClaimEnabled: true, MaxDeliveries: 5,
+	}, processor, nil, metrics)
+	if err != nil {
+		t.Fatalf("NewConsumerWithMetrics() error = %v", err)
+	}
+
+	if err := consumer.claimPending(context.Background()); err != nil {
+		t.Fatalf("claimPending() error = %v", err)
+	}
+	if metrics.gauges[outbound.MetricRedisPendingEvents] != 3 {
+		t.Fatalf("pending gauge = %v", metrics.gauges[outbound.MetricRedisPendingEvents])
+	}
+	if metrics.counters[outbound.MetricRedisAutoclaim] != 1 || metrics.counters[outbound.MetricRedisRetryExhausted] != 1 {
+		t.Fatalf("counters = %#v", metrics.counters)
+	}
+}
+
 func assertAckedIDs(t *testing.T, got []string, want ...string) {
 	t.Helper()
 	if len(got) != len(want) {
@@ -182,6 +212,21 @@ type fakeEventProcessor struct {
 	rejectionErr error
 }
 
+type fakeMetrics struct {
+	counters map[string]int
+	gauges   map[string]float64
+}
+
+func (fake *fakeMetrics) IncrementCounter(name string, _ map[string]string) {
+	fake.counters[name]++
+}
+
+func (fake *fakeMetrics) SetGauge(name string, value float64, _ map[string]string) {
+	fake.gauges[name] = value
+}
+
+func (fake *fakeMetrics) ObserveHistogram(_ string, _ float64, _ map[string]string) {}
+
 func (fake *fakeEventProcessor) Process(_ context.Context, events []dto.RawEvent) error {
 	fake.events = append(fake.events, events...)
 	return fake.processErr
@@ -199,12 +244,19 @@ type fakeClaimResult struct {
 }
 
 type fakeStreamClient struct {
-	claims    []fakeClaimResult
-	claimArgs []goredis.XAutoClaimArgs
-	pending   map[string]int64
-	read      []goredis.XMessage
-	acked     []string
-	ackErr    error
+	claims       []fakeClaimResult
+	claimArgs    []goredis.XAutoClaimArgs
+	pending      map[string]int64
+	read         []goredis.XMessage
+	acked        []string
+	ackErr       error
+	pendingCount int64
+}
+
+func (fake *fakeStreamClient) XPending(ctx context.Context, _, _ string) *goredis.XPendingCmd {
+	cmd := goredis.NewXPendingCmd(ctx)
+	cmd.SetVal(&goredis.XPending{Count: fake.pendingCount})
+	return cmd
 }
 
 func newFakeStreamClient() *fakeStreamClient {

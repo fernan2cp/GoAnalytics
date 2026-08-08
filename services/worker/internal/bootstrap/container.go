@@ -12,6 +12,7 @@ import (
 	"goanalytics/services/worker/internal/adapters/inbound/redisstream"
 	"goanalytics/services/worker/internal/adapters/outbound/httpresolver"
 	loggeradapter "goanalytics/services/worker/internal/adapters/outbound/logger"
+	metricsadapter "goanalytics/services/worker/internal/adapters/outbound/metrics"
 	postgresadapter "goanalytics/services/worker/internal/adapters/outbound/postgres"
 	redisadapter "goanalytics/services/worker/internal/adapters/outbound/redis"
 	"goanalytics/services/worker/internal/adapters/outbound/system"
@@ -91,7 +92,8 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		return nil, err
 	}
 
-	process := usecases.NewProcessEventsUseCaseWithOptions(
+	metricsRegistry := metricsadapter.NewRegistry()
+	process := usecases.NewProcessEventsUseCaseWithMetrics(
 		nil,
 		eventRepository,
 		rejectedRepository,
@@ -102,8 +104,9 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		appLogger,
 		usecases.RehydrateSiteOptions{SiteCacheTTL: config.SiteCacheTTL},
 		config.SemanticDedupRules,
+		metricsRegistry,
 	)
-	consumer, err := redisstream.NewConsumer(redisClient, redisstream.Config{
+	consumer, err := redisstream.NewConsumerWithMetrics(redisClient, redisstream.Config{
 		StreamName:            config.EventStreamName,
 		GroupName:             config.WorkerConsumerGroup,
 		ConsumerName:          config.WorkerName,
@@ -114,7 +117,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		PendingClaimInterval:  config.WorkerPendingClaimInterval,
 		PendingClaimBatchSize: config.WorkerPendingClaimBatchSize,
 		MaxDeliveries:         config.WorkerMaxDeliveries,
-	}, process, appLogger)
+	}, process, appLogger, metricsRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +134,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		Postgres:    pgPool,
 		Logger:      appLogger,
 		Consumer:    consumer,
-		Health:      httphealth.NewRouter(httphealth.NewHealthHandler(), readyHandler),
+		Health:      httphealth.NewRouterWithMetrics(httphealth.NewHealthHandler(), readyHandler, metricsRegistry.Handler()),
 	}, nil
 }
 

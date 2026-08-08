@@ -1,0 +1,13 @@
+{
+  "profile_version": 1,
+  "seed": 20260808,
+  "tenants": 20,
+  "subjects": 100000,
+  "subject_events_per_month": 500000,
+  "query_limit": 10,
+  "objectives": {
+    "query_p95_ms": 300,
+    "global_projection_max_minutes": 30,
+    "bootstrap_max_minutes": 60
+  }
+}

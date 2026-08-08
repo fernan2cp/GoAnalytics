@@ -24,6 +24,7 @@ type streamClient interface {
 	XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) *goredis.StatusCmd
 	XReadGroup(ctx context.Context, args *goredis.XReadGroupArgs) *goredis.XStreamSliceCmd
 	XAutoClaim(ctx context.Context, args *goredis.XAutoClaimArgs) *goredis.XAutoClaimCmd
+	XPending(ctx context.Context, stream string, group string) *goredis.XPendingCmd
 	XPendingExt(ctx context.Context, args *goredis.XPendingExtArgs) *goredis.XPendingExtCmd
 	XAck(ctx context.Context, stream string, group string, ids ...string) *goredis.IntCmd
 }
@@ -59,6 +60,7 @@ type Consumer struct {
 	now                   func() time.Time
 	process               eventProcessor
 	logger                outbound.Logger
+	metrics               outbound.Metrics
 }
 
 // Config contiene la configuracion del consumer Redis Stream.
@@ -87,6 +89,17 @@ func NewConsumer(
 	config Config,
 	process eventProcessor,
 	logger outbound.Logger,
+) (*Consumer, error) {
+	return NewConsumerWithMetrics(client, config, process, logger, nil)
+}
+
+// NewConsumerWithMetrics crea un consumer con observabilidad opcional.
+func NewConsumerWithMetrics(
+	client streamClient,
+	config Config,
+	process eventProcessor,
+	logger outbound.Logger,
+	metrics outbound.Metrics,
 ) (*Consumer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("cliente redis requerido")
@@ -136,6 +149,7 @@ func NewConsumer(
 		now:                   time.Now,
 		process:               process,
 		logger:                logger,
+		metrics:               metrics,
 	}, nil
 }
 
@@ -204,6 +218,7 @@ func (consumer *Consumer) shouldClaimPending() bool {
 // errores individuales de persistencia se registran y dejan el mensaje
 // pendiente sin detener el resto del lote reclamado.
 func (consumer *Consumer) claimPending(ctx context.Context) error {
+	consumer.updatePendingGauge(ctx)
 	start := "0-0"
 	for {
 		messages, next, err := consumer.client.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
@@ -220,6 +235,7 @@ func (consumer *Consumer) claimPending(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		consumer.incrementCounter(outbound.MetricRedisAutoclaim)
 		if len(messages) > 0 {
 			deliveries, err := consumer.pendingDeliveryCounts(ctx, messages)
 			if err != nil {
@@ -232,6 +248,19 @@ func (consumer *Consumer) claimPending(ctx context.Context) error {
 		}
 		start = next
 	}
+}
+
+// updatePendingGauge publica el tamaño actual del PEL sin afectar el consumo.
+func (consumer *Consumer) updatePendingGauge(ctx context.Context) {
+	if consumer.metrics == nil {
+		return
+	}
+	pending, err := consumer.client.XPending(ctx, consumer.streamName, consumer.groupName).Result()
+	if err != nil {
+		consumer.logError(ctx, "fallo consulta de pendientes para metricas", map[string]any{"error": err.Error()})
+		return
+	}
+	consumer.metrics.SetGauge(outbound.MetricRedisPendingEvents, float64(pending.Count), nil)
 }
 
 // pendingDeliveryCounts consulta la cantidad de entregas de mensajes reclamados.
@@ -340,6 +369,15 @@ func (consumer *Consumer) rejectAndAck(ctx context.Context, message goredis.XMes
 		"reason":         reason,
 		"delivery_count": deliveryCount,
 	})
+	if reason == rejection.ReasonStreamRetryExhausted {
+		consumer.incrementCounter(outbound.MetricRedisRetryExhausted)
+	}
+}
+
+func (consumer *Consumer) incrementCounter(name string) {
+	if consumer.metrics != nil {
+		consumer.metrics.IncrementCounter(name, nil)
+	}
 }
 
 // ensureGroup crea el consumer group si todavia no existe.
