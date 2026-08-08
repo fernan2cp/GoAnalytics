@@ -16,7 +16,7 @@ Estados permitidos:
 | Fase | Tarea | Resumen | Responsable | Estado | Evidencia |
 |---|---|---|---|---|---|
 | 0 | `TASK-CA-0001` | Recuperar pendientes Redis | GoAnalytics | `done` | Worker e integración Redis aprobados; `AC-CA-002` y `AC-CA-003` cubiertos |
-| 0 | `TASK-CA-0002` | Aislar persistencia e idempotencia | GoAnalytics | `pending` | Pendiente |
+| 0 | `TASK-CA-0002` | Aislar persistencia e idempotencia | GoAnalytics | `done` | `AC-CA-004` cubierto; regresión de `AC-CA-001` preservada |
 | 0 | `TASK-CA-0003` | Flags, configuración y migración `005` | GoAnalytics | `pending` | Pendiente |
 | 0 | `TASK-CA-0004` | Extender resolver de sites | Ambos proyectos | `pending` | Pendiente |
 | 0 | `TASK-CA-0005` | Preparar operación y rendimiento | GoAnalytics | `pending` | Pendiente |

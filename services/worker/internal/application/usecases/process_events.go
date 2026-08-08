@@ -127,6 +127,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 
 	validEvents := make([]event.ValidatedEvent, 0, len(events))
 	rejectedEvents := make([]rejection.RejectedEvent, 0)
+	rawByEventID := make(map[string]dto.RawEvent, len(events))
 
 	for _, raw := range events {
 		if err := validateRawEvent(raw); err != nil {
@@ -181,6 +182,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			continue
 		}
 		validEvents = append(validEvents, validEvent)
+		rawByEventID[validEvent.EventID] = raw
 	}
 
 	if len(rejectedEvents) > 0 {
@@ -189,13 +191,50 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		}
 	}
 	if len(validEvents) > 0 {
-		if err := uc.eventRepository.SaveBatch(ctx, validEvents); err != nil {
-			return fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, err)
+		results := uc.eventRepository.SaveBatch(ctx, validEvents)
+		if len(results) != len(validEvents) {
+			return fmt.Errorf("%w: resultados=%d eventos=%d", ErrPersistValidEventsFailed, len(results), len(validEvents))
 		}
-		for _, valid := range validEvents {
-			if err := uc.markDeduplicationKeys(ctx, valid); err != nil {
-				return fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+		persistenceRejected := make([]rejection.RejectedEvent, 0)
+		var firstErr error
+		for index, result := range results {
+			valid := validEvents[index]
+			if result.EventID != valid.EventID {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: resultado fuera de orden para %s", ErrPersistValidEventsFailed, valid.EventID)
+				}
+				continue
 			}
+			if result.Err != nil {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, result.Err)
+				}
+				continue
+			}
+			if result.Status == outbound.EventPersistenceConflict {
+				rejected := uc.buildRejectedEvent(rawByEventID[valid.EventID], rejection.ReasonIdempotencyConflict, rejection.SeverityWarning, valid.DedupStrategy)
+				rejected.RawPayload["conflict_field"] = result.ConflictField
+				rejected.RawPayload["existing_event_id"] = result.ExistingEventID
+				persistenceRejected = append(persistenceRejected, rejected)
+				continue
+			}
+			if !result.IsIdempotentSuccess() {
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: estado desconocido %q", ErrPersistValidEventsFailed, result.Status)
+				}
+				continue
+			}
+			if err := uc.markDeduplicationKeys(ctx, valid); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+			}
+		}
+		if len(persistenceRejected) > 0 {
+			if err := uc.rejectedRepository.SaveBatch(ctx, persistenceRejected); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("%w: %v", ErrPersistRejectedFailed, err)
+			}
+		}
+		if firstErr != nil {
+			return firstErr
 		}
 	}
 	return nil

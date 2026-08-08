@@ -512,6 +512,69 @@ func TestProcessReturnsPersistenceErrors(t *testing.T) {
 	}
 }
 
+func TestProcessAcceptsPersistentDuplicateAndRefreshesDeduplication(t *testing.T) {
+	raw := validRawEvent()
+	raw.LogicalEventID = "logical-duplicate"
+	repository := &fakeEventRepository{status: outbound.EventPersistenceDuplicateLogical}
+	deduplicator := &fakeDeduplicator{}
+	useCase := newTestProcessUseCase(time.Now(), repository, &fakeRejectedRepository{}, cachedSite(), nil, deduplicator)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if !deduplicator.wasMarked(dedupStrategyLogical, scopedKey(cachedSite(), raw.LogicalEventID)) {
+		t.Fatalf("duplicado persistente no refresco deduplicacion logica")
+	}
+}
+
+func TestProcessPersistsContradictoryIdempotencyConflict(t *testing.T) {
+	raw := validRawEvent()
+	raw.IdempotencyKey = "operation-1"
+	repository := &fakeEventRepository{results: []outbound.EventPersistenceResult{{
+		EventID:         raw.EventID,
+		Status:          outbound.EventPersistenceConflict,
+		ExistingEventID: "existing-event",
+		ConflictField:   "idempotency_key",
+	}}}
+	rejectedRepository := &fakeRejectedRepository{}
+	useCase := newTestProcessUseCase(time.Now(), repository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(rejectedRepository.events) != 1 {
+		t.Fatalf("rechazos = %d, want 1", len(rejectedRepository.events))
+	}
+	got := rejectedRepository.events[0]
+	if got.Reason != rejection.ReasonIdempotencyConflict || got.RawPayload["conflict_field"] != "idempotency_key" || got.RawPayload["existing_event_id"] != "existing-event" {
+		t.Fatalf("rechazo = %#v", got)
+	}
+}
+
+func TestProcessPreservesSuccessfulResultsWhenAnotherEventFails(t *testing.T) {
+	first := validRawEvent()
+	second := validRawEvent()
+	second.EventID = "event-second"
+	second.LogicalEventID = "logical-second"
+	repository := &fakeEventRepository{results: []outbound.EventPersistenceResult{
+		{EventID: first.EventID, Err: errors.New("db caida")},
+		{EventID: second.EventID, Status: outbound.EventPersistenceInserted},
+	}}
+	deduplicator := &fakeDeduplicator{}
+	useCase := newTestProcessUseCase(time.Now(), repository, &fakeRejectedRepository{}, cachedSite(), nil, deduplicator)
+
+	err := useCase.Process(context.Background(), []dto.RawEvent{first, second})
+	if !errors.Is(err, ErrPersistValidEventsFailed) {
+		t.Fatalf("error = %v, want ErrPersistValidEventsFailed", err)
+	}
+	if len(repository.events) != 2 {
+		t.Fatalf("eventos entregados al repositorio = %d, want 2", len(repository.events))
+	}
+	if !deduplicator.wasMarked(dedupStrategyLogical, scopedKey(cachedSite(), second.LogicalEventID)) {
+		t.Fatalf("resultado exitoso posterior no fue confirmado en deduplicacion")
+	}
+}
+
 func TestRecordStreamRejectionStoresOnlySafePayloadMetadata(t *testing.T) {
 	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
 	repository := &fakeRejectedRepository{}
@@ -670,14 +733,27 @@ func cachedSite() site.SiteConfig {
 }
 
 type fakeEventRepository struct {
-	events []event.ValidatedEvent
-	err    error
+	events  []event.ValidatedEvent
+	err     error
+	status  outbound.EventPersistenceStatus
+	results []outbound.EventPersistenceResult
 }
 
-func (fake *fakeEventRepository) SaveBatch(ctx context.Context, events []event.ValidatedEvent) error {
+func (fake *fakeEventRepository) SaveBatch(ctx context.Context, events []event.ValidatedEvent) []outbound.EventPersistenceResult {
 	_ = ctx
 	fake.events = append(fake.events, events...)
-	return fake.err
+	if fake.results != nil {
+		return fake.results
+	}
+	status := fake.status
+	if status == "" {
+		status = outbound.EventPersistenceInserted
+	}
+	results := make([]outbound.EventPersistenceResult, 0, len(events))
+	for _, item := range events {
+		results = append(results, outbound.EventPersistenceResult{EventID: item.EventID, Status: status, Err: fake.err})
+	}
+	return results
 }
 
 type fakeRejectedRepository struct {

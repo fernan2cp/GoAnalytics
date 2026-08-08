@@ -32,7 +32,7 @@
 
 ### TASK-CA-0002 — Aislar Persistencia E Idempotencia Por Evento
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-004`, `REQ-CA-009`, `REQ-CA-010`.
 - **Criterios:** `AC-CA-001`, `AC-CA-004`.
@@ -42,7 +42,7 @@
   2. Distinguir duplicado exacto, duplicado lógico, duplicado funcional y error no recuperable.
   3. Confirmar como éxito idempotente los conflictos esperables y preservar los demás eventos del lote.
   4. Mantener sin cambios el alcance de los índices existentes y preparar la unicidad tenant-first para sujetos.
-- **Evidencia:** pendiente: pruebas de conflictos concurrentes y regresión del repositorio de eventos.
+- **Evidencia:** `go test ./... -count=1` y `go vet ./...` aprobados en `services/worker`; integración PostgreSQL real aprobada para duplicados exactos, lógicos y funcionales, contradicción de idempotencia junto con un evento válido y conflicto lógico concurrente; `make test` aprobó ingest y worker, y `npm test --prefix packages/web-sdk` aprobó compilación y 16 pruebas. Los índices y las migraciones existentes permanecen sin cambios.
 
 ### TASK-CA-0003 — Agregar Flags, Configuración Y Migración `005`
 
