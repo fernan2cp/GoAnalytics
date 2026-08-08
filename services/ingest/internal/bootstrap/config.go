@@ -22,12 +22,13 @@ type Config struct {
 	HTTPHost string
 	HTTPPort int
 
-	JWTAlgorithm         string
-	GoAnalyticsJWTSecret string
-	JWTIssuer            string
-	JWTAudience          string
-	JWTExpirationMinutes int
-	HideAuthFailures     bool
+	JWTAlgorithm                 string
+	GoAnalyticsJWTSecret         string
+	JWTIssuer                    string
+	JWTAudience                  string
+	JWTExpirationMinutes         int
+	HideAuthFailures             bool
+	SubjectInternalEventsEnabled bool
 
 	RedisAddr     string
 	RedisUsername string
@@ -123,6 +124,9 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		return Config{}, err
 	}
 	if config.HideAuthFailures, err = getEnvBool("INGEST_HIDE_AUTH_FAILURES", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectInternalEventsEnabled, err = getEnvBool("SUBJECT_INTERNAL_EVENTS_ENABLED", false); err != nil {
 		return Config{}, err
 	}
 

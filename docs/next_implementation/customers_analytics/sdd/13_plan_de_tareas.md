@@ -46,7 +46,7 @@
 
 ### TASK-CA-0003 — Agregar Flags, Configuración Y Migración `005`
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-001`, `REQ-CA-002`, `REQ-CA-003`, `REQ-CA-005`, `REQ-CA-015`.
 - **Criterios:** `AC-CA-001`, `AC-CA-006`, `AC-CA-028`.
@@ -56,7 +56,7 @@
   2. Incorporar flags separados para endpoint interno, normalización, backfill, proyecciones, registro y API.
   3. Mantener todos los flags apagados por defecto y validar combinaciones inválidas al iniciar.
   4. Implementar `down` simétrico para desarrollo con advertencia explícita de pérdida de datos.
-- **Evidencia:** pendiente: pruebas up/down desde base vacía y versión `004`, y matriz de defaults.
+- **Evidencia:** migración `005` validada con `migrate` sobre PostgreSQL 16 desde base vacía y desde versión `004` con un evento legacy; el default produjo `event_source=web`, el `CHECK` rechazó un origen inválido y ambos `down` regresaron a versión `004` conservando el evento. Las pruebas de bootstrap verifican los seis flags apagados por defecto, booleanos inválidos y dependencias de normalización/proyección. `make test`, ambos `go vet ./...` y las 16 pruebas del SDK aprobaron.
 
 ### TASK-CA-0004 — Extender El Resolver De Sites
 

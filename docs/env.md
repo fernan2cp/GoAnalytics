@@ -9,6 +9,26 @@ Las variables base estan documentadas en `.env.example`.
 - Las claves Redis deben usar el prefijo `goanalytics:*`.
 - Los secretos reales no deben commitearse.
 
+## Estadisticas de sujetos
+
+Todas las capacidades del MVP son opt-in y permanecen apagadas por defecto:
+
+```text
+SUBJECT_INTERNAL_EVENTS_ENABLED=false
+SUBJECT_ANALYTICS_ENABLED=false
+SUBJECT_BOOTSTRAP_ENABLED=false
+SUBJECT_PROJECTION_ENABLED=false
+SUBJECT_CONTEXT_REGISTRY_ENABLED=false
+SUBJECT_QUERY_API_ENABLED=false
+```
+
+`SUBJECT_INTERNAL_EVENTS_ENABLED` controla solamente el futuro endpoint de
+ingesta server-to-server. En el worker, bootstrap, proyecciones y registro
+requieren `SUBJECT_ANALYTICS_ENABLED`; la query API requiere ademas
+`SUBJECT_PROJECTION_ENABLED`. Una combinacion invalida impide iniciar el
+proceso afectado. Con todos los flags en `false`, los contratos legacy no
+cambian.
+
 ## Redis
 
 ```text

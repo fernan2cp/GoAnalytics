@@ -59,6 +59,12 @@ type Config struct {
 	SiteCacheTTL          time.Duration
 	DeduplicationTTL      time.Duration
 	SemanticDedupRules    []usecases.SemanticDedupRule
+
+	SubjectAnalyticsEnabled       bool
+	SubjectBootstrapEnabled       bool
+	SubjectProjectionEnabled      bool
+	SubjectContextRegistryEnabled bool
+	SubjectQueryAPIEnabled        bool
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -159,7 +165,47 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.SemanticDedupRules, err = getEnvSemanticDedupRules("EVENT_SEMANTIC_DEDUP_RULES_JSON"); err != nil {
 		return Config{}, err
 	}
+	if config.SubjectAnalyticsEnabled, err = getEnvBool("SUBJECT_ANALYTICS_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectBootstrapEnabled, err = getEnvBool("SUBJECT_BOOTSTRAP_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectProjectionEnabled, err = getEnvBool("SUBJECT_PROJECTION_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectContextRegistryEnabled, err = getEnvBool("SUBJECT_CONTEXT_REGISTRY_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectQueryAPIEnabled, err = getEnvBool("SUBJECT_QUERY_API_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if err := config.validateSubjectFeatures(); err != nil {
+		return Config{}, err
+	}
 	return config, nil
+}
+
+// validateSubjectFeatures valida dependencias entre capacidades opt-in.
+//
+// Las capacidades derivadas no pueden iniciar sin sus prerrequisitos. Esta
+// validacion ocurre antes de abrir conexiones para detectar despliegues
+// incompletos sin alterar el worker legacy cuando todos los flags estan
+// apagados.
+func (config Config) validateSubjectFeatures() error {
+	if config.SubjectBootstrapEnabled && !config.SubjectAnalyticsEnabled {
+		return fmt.Errorf("SUBJECT_BOOTSTRAP_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
+	}
+	if config.SubjectProjectionEnabled && !config.SubjectAnalyticsEnabled {
+		return fmt.Errorf("SUBJECT_PROJECTION_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
+	}
+	if config.SubjectContextRegistryEnabled && !config.SubjectAnalyticsEnabled {
+		return fmt.Errorf("SUBJECT_CONTEXT_REGISTRY_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
+	}
+	if config.SubjectQueryAPIEnabled && !config.SubjectProjectionEnabled {
+		return fmt.Errorf("SUBJECT_QUERY_API_ENABLED requiere SUBJECT_PROJECTION_ENABLED")
+	}
+	return nil
 }
 
 // HealthAddress devuelve la direccion HTTP operativa host:port del worker.
