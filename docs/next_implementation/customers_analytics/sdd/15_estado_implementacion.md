@@ -25,7 +25,7 @@ Estados permitidos:
 | 1 | `TASK-CA-0103` | Propagar origen, timezone y trazabilidad | GoAnalytics | `done` | Recorrido web/server, resolución tenant/site, snapshot timezone/source y persistencia trazable aprobados |
 | 1 | `TASK-CA-0104` | Normalización 1:N tenant-first | GoAnalytics | `done` | Normalización opt-in, atomicidad, convergencia concurrente, fallos semánticos e idempotencia entre sites aprobados |
 | 1 | `TASK-CA-0105` | Lifecycle monotónico y merge | GoAnalytics | `done` | Precedencia compuesta, no-op auditable, deactivate/reactivate, merge y elegibilidad aprobados |
-| 1 | `TASK-CA-0106` | Emisión desde proyecto principal | Proyecto principal | `pending` | Pendiente |
+| 1 | `TASK-CA-0106` | Emisión desde proyecto principal | Proyecto principal | `done` | Emisor post-commit opt-in, retry directo, idempotencia, lifecycle y degradación aprobados; Dragon `2747c0fdf` |
 | 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `pending` | Pendiente |
 | 2 | `TASK-CA-0202` | Cliente de snapshot y bootstrap | GoAnalytics | `pending` | Pendiente |
 | 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `pending` | Pendiente |
@@ -49,7 +49,7 @@ Estados permitidos:
 | Gate | Condición Para Aprobar | Estado Inicial |
 |---|---|---|
 | Fase 0 → 1 | Pendientes recuperables, conflictos aislados, migración `005`, resolver aditivo y flags seguros | `done` |
-| Fase 1 → 2 | Endpoint interno, identidad, normalización, lifecycle y emisor post-commit aceptados | `pending` |
+| Fase 1 → 2 | Endpoint interno, identidad, normalización, lifecycle y emisor post-commit aceptados | `done` |
 | Fase 2 → 3 | Snapshot estable, bootstrap reanudable y backfill certificado | `pending` |
 | Fase 3 → 4 | Proyección global, query API e integración global dentro de SLO | `pending` |
 | Cierre MVP | Registro, resolución inicial, ranking contextual, rollout y regresión completa aceptados | `pending` |

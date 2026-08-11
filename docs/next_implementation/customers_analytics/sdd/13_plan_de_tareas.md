@@ -164,7 +164,7 @@
 
 ### TASK-CA-0106 — Emitir Asociaciones Y Lifecycle Desde El Proyecto Principal
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** proyecto principal.
 - **Requisitos:** `REQ-CA-060`, `REQ-CA-061`.
 - **Criterios:** `AC-CA-025`.
@@ -175,7 +175,7 @@
   3. No revertir la operación de negocio ante el fallo final.
   4. Exponer métricas, log y correlación para reintento o análisis operativo.
   5. Generar `source_mutation_id` monotónico y estable dentro de la fuente.
-- **Evidencia:** pendiente: pruebas de contrato y fallos simulados en el repositorio principal.
+- **Evidencia:** DragonFullAV `2747c0fdf` incorpora un emisor opt-in desactivado por defecto, conectado después del commit de creación de turnos y conversión de clientes. Conserva `event_id` e `idempotency_key` entre intentos, usa timeout de un segundo, backoff de 250/1000 ms, reintenta transporte/429/5xx y no reintenta 4xx de contrato. El adaptador absorbe el fallo final, registra correlación y contadores sin PII, y genera la tupla lifecycle estable desde la mutación de origen. Las 4 pruebas específicas y 30 pruebas compatibles de turnos aprobaron; 6 pruebas ampliadas conservaron un fallo preexistente ajeno en `crud/erp/sale_order.py:625` por el fixture SQLite. `py_compile`, `git diff --check` y el escaneo UTF-8 aprobaron. `AC-CA-025` queda cubierto para emisión global; su extensión contextual permanece en `TASK-CA-0407`.
 
 ## 4. Fase 2 — Backfill Y Elegibilidad
 
