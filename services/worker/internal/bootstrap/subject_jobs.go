@@ -23,6 +23,7 @@ type SubjectJobsContainer struct {
 	Postgres       *pgxpool.Pool
 	Bootstrap      *usecases.BootstrapSubjects
 	ProjectGlobal  *usecases.ProjectGlobal
+	ProjectContext *usecases.ProjectContext
 	Scheduler      *usecases.ProjectionScheduler
 	Registry       *usecases.ContextRegistryLoader
 	ResolveInitial *usecases.ResolveInitialContexts
@@ -97,6 +98,21 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 		}
 		container.Redis = redisClient
 		container.Registry = usecases.NewContextRegistryLoader(cache, cache, repository, source)
+		if config.SubjectProjectionEnabled {
+			projectionRepository, projectionErr := postgresadapter.NewProjectionRepository(pool)
+			if projectionErr != nil {
+				pool.Close()
+				_ = redisClient.Close()
+				return nil, projectionErr
+			}
+			container.ProjectContext, err = usecases.NewProjectContext(projectionRepository, config.SubjectProjectionVersion, config.SubjectProjectionBatchSize)
+			if err != nil {
+				pool.Close()
+				_ = redisClient.Close()
+				return nil, err
+			}
+			container.Scheduler = usecases.NewProjectionScheduler(projectionRepository, usecases.NewProjectionSequence(container.ProjectGlobal, container.ProjectContext), config.SubjectProjectionVersion, config.SubjectProjectionInterval, config.SubjectJobsCheckInterval)
+		}
 		resolutionRepository, resolutionErr := postgresadapter.NewContextResolutionRepository(pool)
 		if resolutionErr != nil {
 			pool.Close()

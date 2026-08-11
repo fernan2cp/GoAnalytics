@@ -24,3 +24,10 @@ type GlobalProjectionRepository interface {
 	RecomputeDaysAndCheckpoint(ctx context.Context, name string, version int, days []subject.AffectedDay, to subject.ProjectionWatermark) (int64, error)
 	LastCompletedAt(ctx context.Context, name string, version int) (time.Time, error)
 }
+
+// ContextProjectionRepository abstrae el agregado contextual incremental.
+type ContextProjectionRepository interface {
+	GlobalProjectionRepository
+	LoadAffectedContextDays(ctx context.Context, after subject.ProjectionWatermark, limit int) ([]subject.AffectedContextDay, subject.ProjectionWatermark, int64, error)
+	RecomputeContextDaysAndCheckpoint(ctx context.Context, name string, version int, days []subject.AffectedContextDay, to subject.ProjectionWatermark) (int64, error)
+}

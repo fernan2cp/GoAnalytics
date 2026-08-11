@@ -372,7 +372,7 @@
 
 ### TASK-CA-0405 — Implementar Proyección Contextual
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`, `REQ-CA-047`, `REQ-CA-048`, `REQ-CA-049`.
 - **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`, `AC-CA-019`.
@@ -382,7 +382,7 @@
   2. Reutilizar lock, watermark, recomputación diaria y publicación atómica.
   3. Aplicar elegibilidad y revisión histórica de cada asociación.
   4. Mantener el agregado global independiente y disponible.
-- **Evidencia:** pendiente: pruebas de agregados, tardíos, cambios de revisión y rendimiento.
+- **Evidencia:** se agregó `subject_context` como proyección incremental independiente, con advisory lock, runs, watermark compuesto y reemplazo diario atómico. Solo consume asociaciones normalizadas con resolución `registered`, aplica elegibilidad activa y conserva el agregado global separado. El scheduler diario ejecuta global y contextual en orden cuando el registro está habilitado; también existe `--mode project-context`. Las filas históricas y tardías actualizadas vuelven a entrar por watermark. Pruebas unitarias validan procesamiento, lock y finalización; suite completa y `go vet ./...` aprobaron. `AC-CA-014`, `AC-CA-015`, `AC-CA-016` y `AC-CA-019` quedan cubiertos.
 
 ### TASK-CA-0406 — Habilitar Ranking Contextual Y Fallback
 

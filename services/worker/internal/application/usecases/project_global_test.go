@@ -15,17 +15,34 @@ type projectionLockFake struct{ released bool }
 func (lock *projectionLockFake) Release(context.Context) error { lock.released = true; return nil }
 
 type projectionRepositoryFake struct {
-	lock         *projectionLockFake
-	acquired     bool
-	checkpoint   subject.ProjectionWatermark
-	batches      [][]subject.AffectedDay
-	watermarks   []subject.ProjectionWatermark
-	reads        []int64
-	index        int
-	recomputeErr error
-	completed    bool
-	failed       bool
-	skipped      bool
+	lock           *projectionLockFake
+	acquired       bool
+	checkpoint     subject.ProjectionWatermark
+	batches        [][]subject.AffectedDay
+	watermarks     []subject.ProjectionWatermark
+	reads          []int64
+	index          int
+	recomputeErr   error
+	completed      bool
+	failed         bool
+	skipped        bool
+	contextBatches [][]subject.AffectedContextDay
+	contextIndex   int
+}
+
+func (fake *projectionRepositoryFake) LoadAffectedContextDays(_ context.Context, after subject.ProjectionWatermark, _ int) ([]subject.AffectedContextDay, subject.ProjectionWatermark, int64, error) {
+	if fake.contextIndex >= len(fake.contextBatches) {
+		return nil, after, 0, nil
+	}
+	batch := fake.contextBatches[fake.contextIndex]
+	fake.contextIndex++
+	return batch, subject.ProjectionWatermark{UpdatedAt: time.Now(), ID: int64(fake.contextIndex)}, int64(len(batch)), nil
+}
+func (fake *projectionRepositoryFake) RecomputeContextDaysAndCheckpoint(context.Context, string, int, []subject.AffectedContextDay, subject.ProjectionWatermark) (int64, error) {
+	if fake.recomputeErr != nil {
+		return 0, fake.recomputeErr
+	}
+	return 1, nil
 }
 
 func (fake *projectionRepositoryFake) TryLock(context.Context, string, int) (outbound.ProjectionLock, bool, error) {
@@ -92,5 +109,16 @@ func TestProjectGlobalRecordsSkippedLock(t *testing.T) {
 	projector, _ := NewProjectGlobal(repository, nil, 1, 10)
 	if err := projector.Run(context.Background()); err != nil || !repository.skipped {
 		t.Fatalf("err=%v skipped=%v", err, repository.skipped)
+	}
+}
+
+func TestProjectContextProcessesRegisteredDays(t *testing.T) {
+	repository := &projectionRepositoryFake{lock: &projectionLockFake{}, acquired: true, contextBatches: [][]subject.AffectedContextDay{{{TenantID: "tenant-1", SubjectID: 2, ContextDefinitionID: 3, TimezoneName: "UTC"}}}}
+	projector, _ := NewProjectContext(repository, 1, 10)
+	if err := projector.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !repository.completed || repository.contextIndex != 1 || !repository.lock.released {
+		t.Fatalf("repo=%#v", repository)
 	}
 }

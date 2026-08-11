@@ -39,3 +39,12 @@ type AffectedDay struct {
 	LocalDate    time.Time
 	TimezoneName string
 }
+
+// AffectedContextDay identifica un agregado contextual diario completo.
+type AffectedContextDay struct {
+	TenantID            string
+	SubjectID           int64
+	ContextDefinitionID int64
+	LocalDate           time.Time
+	TimezoneName        string
+}

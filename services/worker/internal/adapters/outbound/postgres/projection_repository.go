@@ -162,6 +162,63 @@ func (repository *ProjectionRepository) RecomputeDaysAndCheckpoint(ctx context.C
 	return written, tx.Commit(ctx)
 }
 
+// LoadAffectedContextDays lee contribuciones registradas por watermark.
+func (repository *ProjectionRepository) LoadAffectedContextDays(ctx context.Context, after subject.ProjectionWatermark, limit int) ([]subject.AffectedContextDay, subject.ProjectionWatermark, int64, error) {
+	fromTime := after.UpdatedAt
+	if fromTime.IsZero() {
+		fromTime = time.Unix(0, 0).UTC()
+	}
+	rows, err := repository.pool.Query(ctx, `SELECT tenant_id,analytics_subject_id,context_definition_id,local_date,timezone_name,updated_at,id FROM analytics_event_subjects WHERE normalization_status='normalized' AND context_resolution_status='registered' AND analytics_subject_id IS NOT NULL AND context_definition_id IS NOT NULL AND local_date IS NOT NULL AND timezone_name IS NOT NULL AND (updated_at>$1 OR(updated_at=$1 AND id>$2)) ORDER BY updated_at,id LIMIT $3`, fromTime, after.ID, limit)
+	if err != nil {
+		return nil, after, 0, err
+	}
+	defer rows.Close()
+	keys := map[string]subject.AffectedContextDay{}
+	watermark := after
+	var read int64
+	for rows.Next() {
+		var day subject.AffectedContextDay
+		if err = rows.Scan(&day.TenantID, &day.SubjectID, &day.ContextDefinitionID, &day.LocalDate, &day.TimezoneName, &watermark.UpdatedAt, &watermark.ID); err != nil {
+			return nil, after, read, err
+		}
+		keys[fmt.Sprintf("%s\x00%d\x00%d\x00%s\x00%s", day.TenantID, day.SubjectID, day.ContextDefinitionID, day.LocalDate.Format("2006-01-02"), day.TimezoneName)] = day
+		read++
+	}
+	if err = rows.Err(); err != nil {
+		return nil, after, read, err
+	}
+	days := make([]subject.AffectedContextDay, 0, len(keys))
+	for _, day := range keys {
+		days = append(days, day)
+	}
+	return days, watermark, read, nil
+}
+
+// RecomputeContextDaysAndCheckpoint reemplaza días contextuales atómicamente.
+func (repository *ProjectionRepository) RecomputeContextDaysAndCheckpoint(ctx context.Context, name string, version int, days []subject.AffectedContextDay, to subject.ProjectionWatermark) (int64, error) {
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	var written int64
+	for _, day := range days {
+		if _, err = tx.Exec(ctx, `DELETE FROM analytics_subject_context_daily WHERE tenant_id=$1 AND analytics_subject_id=$2 AND context_definition_id=$3 AND local_date=$4 AND timezone_name=$5 AND projection_version=$6`, day.TenantID, day.SubjectID, day.ContextDefinitionID, day.LocalDate, day.TimezoneName, version); err != nil {
+			return written, err
+		}
+		result, insertErr := tx.Exec(ctx, `INSERT INTO analytics_subject_context_daily(tenant_id,analytics_subject_id,context_definition_id,local_date,timezone_name,impression_count,view_count,selection_count,association_count,last_association_at,projection_version,computed_at) SELECT d.tenant_id,d.analytics_subject_id,d.context_definition_id,d.local_date,d.timezone_name,count(*) FILTER(WHERE d.event_name='subject_impression'),count(*) FILTER(WHERE d.event_name='subject_viewed'),count(*) FILTER(WHERE d.event_name='subject_selected'),count(*) FILTER(WHERE d.event_name='subject_associated'),max(d.event_time) FILTER(WHERE d.event_name='subject_associated'),$6,now() FROM analytics_event_subjects d JOIN analytics_subjects s ON s.id=d.analytics_subject_id AND s.lifecycle_status='active' WHERE d.tenant_id=$1 AND d.analytics_subject_id=$2 AND d.context_definition_id=$3 AND d.local_date=$4 AND d.timezone_name=$5 AND d.normalization_status='normalized' AND d.context_resolution_status='registered' AND d.event_name IN('subject_impression','subject_viewed','subject_selected','subject_associated') GROUP BY d.tenant_id,d.analytics_subject_id,d.context_definition_id,d.local_date,d.timezone_name`, day.TenantID, day.SubjectID, day.ContextDefinitionID, day.LocalDate, day.TimezoneName, version)
+		if insertErr != nil {
+			return written, insertErr
+		}
+		written += result.RowsAffected()
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO analytics_projection_checkpoints(projection_name,projection_version,last_updated_at,last_id,updated_at) VALUES($1,$2,$3,$4,now()) ON CONFLICT(projection_name,projection_version) DO UPDATE SET last_updated_at=EXCLUDED.last_updated_at,last_id=EXCLUDED.last_id,updated_at=now()`, name, version, to.UpdatedAt, to.ID)
+	if err != nil {
+		return written, err
+	}
+	return written, tx.Commit(ctx)
+}
+
 // ReplaceDailyAndCheckpoint reemplaza días absolutos y avanza el checkpoint atómicamente.
 func (repository *ProjectionRepository) ReplaceDailyAndCheckpoint(ctx context.Context, name string, version int, aggregates []subject.DailyAggregate, to subject.ProjectionWatermark) error {
 	tx, err := repository.pool.Begin(ctx)

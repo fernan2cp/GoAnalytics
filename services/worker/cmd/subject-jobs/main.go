@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global, refresh-registry o resolve-initial-contexts")
+	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global, project-context, refresh-registry o resolve-initial-contexts")
 	flag.Parse()
 	if err := run(*mode); err != nil {
 		fmt.Fprintf(os.Stderr, "subject-jobs: %v\n", err)
@@ -24,7 +24,7 @@ func main() {
 }
 
 func run(mode string) error {
-	if mode != "bootstrap" && mode != "project-global" && mode != "refresh-registry" && mode != "resolve-initial-contexts" && mode != "serve" {
+	if mode != "bootstrap" && mode != "project-global" && mode != "project-context" && mode != "refresh-registry" && mode != "resolve-initial-contexts" && mode != "serve" {
 		return fmt.Errorf("modo no soportado: %s", mode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -49,6 +49,11 @@ func run(mode string) error {
 			return fmt.Errorf("proyección global deshabilitada")
 		}
 		return container.ProjectGlobal.Run(ctx)
+	case "project-context":
+		if container.ProjectContext == nil {
+			return fmt.Errorf("proyección contextual deshabilitada")
+		}
+		return container.ProjectContext.Run(ctx)
 	case "refresh-registry":
 		if container.Registry == nil {
 			return fmt.Errorf("registro de contextos deshabilitado")
