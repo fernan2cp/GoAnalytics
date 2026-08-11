@@ -190,6 +190,58 @@ func TestEventRepositoryIntegrationConvergesConcurrentSubjectCreation(t *testing
 	}
 }
 
+func TestEventRepositoryIntegrationAppliesMonotonicLifecycleAndMerge(t *testing.T) {
+	repository, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+	base := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+
+	deactivated := integrationValidatedEvent("lifecycle-deactivated")
+	deactivated.EventSource = "server"
+	deactivated.EventName = "subject_deactivated"
+	deactivated.IdempotencyKey = "lifecycle-20"
+	deactivated.SubjectDetails = []subject.EventDetail{integrationLifecycleDetail("customer-lifecycle", base, "mutation-20")}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{deactivated}), outbound.EventPersistenceInserted)
+
+	older := integrationValidatedEvent("lifecycle-older")
+	older.EventSource = "server"
+	older.EventName = "subject_reactivated"
+	older.IdempotencyKey = "lifecycle-old"
+	older.SubjectDetails = []subject.EventDetail{integrationLifecycleDetail("customer-lifecycle", base.Add(-time.Second), "mutation-99")}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{older}), outbound.EventPersistenceInserted)
+
+	reactivated := integrationValidatedEvent("lifecycle-reactivated")
+	reactivated.EventSource = "server"
+	reactivated.EventName = "subject_reactivated"
+	reactivated.IdempotencyKey = "lifecycle-21"
+	reactivated.SubjectDetails = []subject.EventDetail{integrationLifecycleDetail("customer-lifecycle", base, "mutation-21")}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{reactivated}), outbound.EventPersistenceInserted)
+
+	merged := integrationValidatedEvent("lifecycle-merged")
+	merged.EventSource = "server"
+	merged.EventName = "subject_merged"
+	merged.IdempotencyKey = "lifecycle-merge"
+	mergeDetail := integrationLifecycleDetail("customer-lifecycle", base.Add(time.Second), "mutation-01")
+	mergeDetail.MergedIntoExternalSubjectID = "customer-target"
+	merged.SubjectDetails = []subject.EventDetail{mergeDetail}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{merged}), outbound.EventPersistenceInserted)
+
+	var status, mutation, targetExternalID string
+	if err := pool.QueryRow(ctx, `
+SELECT source.lifecycle_status, source.lifecycle_source_mutation_id, target.external_subject_id
+FROM analytics_subjects source
+JOIN analytics_subjects target ON target.id=source.merged_into_subject_id
+WHERE source.external_subject_id='customer-lifecycle'`).Scan(&status, &mutation, &targetExternalID); err != nil {
+		t.Fatalf("consultar merge: %v", err)
+	}
+	var ignored int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_event_subjects WHERE normalization_status='lifecycle_ignored'").Scan(&ignored); err != nil {
+		t.Fatalf("consultar lifecycle ignorado: %v", err)
+	}
+	if status != "merged" || mutation != "mutation-01" || targetExternalID != "customer-target" || ignored != 1 {
+		t.Fatalf("status=%s mutation=%s target=%s ignored=%d", status, mutation, targetExternalID, ignored)
+	}
+}
+
 func newIntegrationEventRepository(t *testing.T) (*EventRepository, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_INTEGRATION_DSN")
@@ -254,6 +306,14 @@ func integrationSubjectDetail(externalID string, status subject.LifecycleStatus)
 		Metadata:                map[string]any{},
 		InitialLifecycleStatus:  status,
 	}
+}
+
+func integrationLifecycleDetail(externalID string, updatedAt time.Time, mutationID string) subject.EventDetail {
+	detail := integrationSubjectDetail(externalID, subject.LifecycleUnknown)
+	detail.Relation = "lifecycle"
+	detail.LifecycleSourceUpdatedAt = &updatedAt
+	detail.LifecycleSourceMutationID = mutationID
+	return detail
 }
 
 func assertPersistenceStatus(t *testing.T, results []outbound.EventPersistenceResult, want outbound.EventPersistenceStatus) {

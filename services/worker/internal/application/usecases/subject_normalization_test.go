@@ -96,6 +96,34 @@ func TestNormalizeSubjectDetailsHandlesAbsentAndMalformedCollection(t *testing.T
 	}
 }
 
+func TestNormalizeSubjectDetailsParsesLifecycleTupleAndMerge(t *testing.T) {
+	t.Parallel()
+
+	valid := normalizationEvent()
+	valid.EventSource = event.SourceServer
+	valid.EventName = "subject_merged"
+	valid.Properties["lifecycle"] = map[string]any{
+		"source_updated_at":      "2026-08-10T12:00:00.123456Z",
+		"source_mutation_id":     "mutation-21",
+		"effective_at":           "2026-01-01T00:00:00Z",
+		"merged_into_subject_id": "customer-2",
+	}
+
+	detail := normalizeSubjectDetails(valid)[0]
+	if detail.NormalizationStatus != subject.NormalizationNormalized || detail.LifecycleSourceUpdatedAt == nil || detail.LifecycleSourceMutationID != "mutation-21" || detail.MergedIntoExternalSubjectID != "customer-2" {
+		t.Fatalf("lifecycle = %#v", detail)
+	}
+	if detail.LifecycleEffectiveAt == nil || detail.LifecycleEffectiveAt.Year() != 2026 {
+		t.Fatalf("effective_at = %#v", detail.LifecycleEffectiveAt)
+	}
+
+	valid.Properties["lifecycle"].(map[string]any)["merged_into_subject_id"] = "customer-1"
+	detail = normalizeSubjectDetails(valid)[0]
+	if detail.NormalizationStatus != subject.NormalizationInvalidSubject || detail.NormalizationReason != "invalid_lifecycle" {
+		t.Fatalf("merge consigo mismo = %#v", detail)
+	}
+}
+
 func normalizationEvent() event.ValidatedEvent {
 	return event.ValidatedEvent{
 		EventID:     "event-1",

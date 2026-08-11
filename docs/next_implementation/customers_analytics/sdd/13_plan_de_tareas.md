@@ -149,7 +149,7 @@
 
 ### TASK-CA-0105 — Implementar Lifecycle Monotónico Y Merge
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-020`, `REQ-CA-021`, `REQ-CA-022`, `REQ-CA-023`, `REQ-CA-024`.
 - **Criterios:** `AC-CA-009`, `AC-CA-010`.
@@ -160,7 +160,7 @@
   3. Registrar como no-op auditable eventos antiguos o duplicados.
   4. Conservar historia en el sujeto fusionado sin transferir conteos en el MVP.
   5. Mantener solo `active` como estado elegible.
-- **Evidencia:** pendiente: pruebas fuera de orden, empates, duplicados, merge y elegibilidad.
+- **Evidencia:** el normalizador extrae la tupla UTC `source_updated_at + source_mutation_id`, conserva `effective_at` solo como dato y rechaza lifecycle ambiguo o merge consigo mismo sin perder el evento crudo. PostgreSQL aplica la transición mediante un `UPDATE` condicional; el desempate textual usa collation binaria `C`, por lo que una tupla igual, anterior o con mutation ID menor queda `lifecycle_ignored` en el detalle sin modificar la identidad. Deactivate limpia merge y deja inactive; reactivate deja active; merge crea o reutiliza el destino unknown del mismo tenant/tipo, conserva la historia del origen y no mueve conteos. La integración real verificó evento antiguo ignorado, empate resuelto por mutation ID, reactivación y merge final con FK al destino. El dominio prueba orden temporal independiente de `effective_at` y define elegibilidad exclusiva de active. `make test` y `go vet ./...` aprobaron.
 
 ### TASK-CA-0106 — Emitir Asociaciones Y Lifecycle Desde El Proyecto Principal
 

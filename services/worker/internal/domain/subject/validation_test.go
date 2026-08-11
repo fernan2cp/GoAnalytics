@@ -57,3 +57,16 @@ func TestValidateLifecycle(t *testing.T) {
 		})
 	}
 }
+
+func TestLifecycleEligibilityOnlyAllowsActive(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []LifecycleStatus{LifecycleUnknown, LifecycleInactive, LifecycleMerged} {
+		if status.IsEligible() {
+			t.Fatalf("estado %q no debería ser elegible", status)
+		}
+	}
+	if !LifecycleActive.IsEligible() {
+		t.Fatal("active debería ser elegible")
+	}
+}

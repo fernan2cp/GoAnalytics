@@ -12,6 +12,14 @@ const CustomerType Type = "customer"
 // LifecycleStatus representa la elegibilidad y estado de vida de un sujeto.
 type LifecycleStatus string
 
+// IsEligible indica si el estado puede aparecer en sugerencias del MVP.
+//
+// Devuelve true únicamente para active; unknown, inactive y merged conservan
+// historia pero quedan excluidos de resultados.
+func (status LifecycleStatus) IsEligible() bool {
+	return status == LifecycleActive
+}
+
 const (
 	// LifecycleUnknown identifica sujetos descubiertos sin confirmación del backend.
 	LifecycleUnknown LifecycleStatus = "unknown"

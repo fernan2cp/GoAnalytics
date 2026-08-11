@@ -28,6 +28,7 @@ func normalizeSubjectDetails(valid event.ValidatedEvent) []subject.EventDetail {
 		return []subject.EventDetail{invalidSubjectDetail(0, "subjects_not_array")}
 	}
 	operationType, operationID, operationValid := parseOperation(valid.Properties["operation"])
+	lifecycleUpdatedAt, lifecycleMutationID, lifecycleEffectiveAt, mergedIntoID, lifecycleValid := parseLifecycle(valid.EventName, valid.Properties["lifecycle"])
 	contextKey, contextVersion, claimedFamily := parseSubjectContext(valid.Context)
 	localDate, timezoneValid := resolveLocalDate(valid.EventTime, valid.Timezone)
 
@@ -52,21 +53,25 @@ func normalizeSubjectDetails(valid event.ValidatedEvent) []subject.EventDetail {
 		seen[key] = struct{}{}
 
 		detail := subject.EventDetail{
-			SubjectOrdinal:          ordinal,
-			SubjectType:             subjectType,
-			ExternalSubjectID:       externalID,
-			Relation:                relation,
-			OperationType:           operationType,
-			OperationID:             operationID,
-			ContextKey:              contextKey,
-			ContextVersion:          contextVersion,
-			ClaimedContextFamily:    claimedFamily,
-			ContextResolutionStatus: subject.ContextRegistryDisabled,
-			TimezoneName:            valid.Timezone,
-			LocalDate:               localDate,
-			NormalizationStatus:     subject.NormalizationNormalized,
-			Metadata:                map[string]any{},
-			InitialLifecycleStatus:  initialSubjectStatus(valid),
+			SubjectOrdinal:              ordinal,
+			SubjectType:                 subjectType,
+			ExternalSubjectID:           externalID,
+			Relation:                    relation,
+			OperationType:               operationType,
+			OperationID:                 operationID,
+			ContextKey:                  contextKey,
+			ContextVersion:              contextVersion,
+			ClaimedContextFamily:        claimedFamily,
+			ContextResolutionStatus:     subject.ContextRegistryDisabled,
+			TimezoneName:                valid.Timezone,
+			LocalDate:                   localDate,
+			NormalizationStatus:         subject.NormalizationNormalized,
+			Metadata:                    map[string]any{},
+			InitialLifecycleStatus:      initialSubjectStatus(valid),
+			LifecycleSourceUpdatedAt:    lifecycleUpdatedAt,
+			LifecycleSourceMutationID:   lifecycleMutationID,
+			LifecycleEffectiveAt:        lifecycleEffectiveAt,
+			MergedIntoExternalSubjectID: mergedIntoID,
 		}
 		switch {
 		case subjectType == "" || externalID == "" || utf8.RuneCountInString(externalID) > maxSubjectFieldLength || utf8.RuneCountInString(relation) > maxSubjectFieldLength:
@@ -81,6 +86,10 @@ func normalizeSubjectDetails(valid event.ValidatedEvent) []subject.EventDetail {
 			detail.NormalizationStatus = subject.NormalizationInvalidSubject
 			detail.NormalizationReason = "invalid_operation"
 			detail.LocalDate = nil
+		case !lifecycleValid || (valid.EventName == "subject_merged" && mergedIntoID == externalID):
+			detail.NormalizationStatus = subject.NormalizationInvalidSubject
+			detail.NormalizationReason = "invalid_lifecycle"
+			detail.LocalDate = nil
 		case !timezoneValid:
 			detail.NormalizationStatus = subject.NormalizationTimezoneUnresolved
 			detail.NormalizationReason = "timezone_unresolved"
@@ -89,6 +98,64 @@ func normalizeSubjectDetails(valid event.ValidatedEvent) []subject.EventDetail {
 		details = append(details, detail)
 	}
 	return details
+}
+
+// parseLifecycle extrae la tupla monotónica solo para eventos lifecycle.
+func parseLifecycle(eventName string, value any) (*time.Time, string, *time.Time, string, bool) {
+	isLifecycle := eventName == "subject_deactivated" || eventName == "subject_reactivated" || eventName == "subject_merged"
+	if !isLifecycle {
+		return nil, "", nil, "", value == nil
+	}
+	values, ok := value.(map[string]any)
+	if !ok {
+		return nil, "", nil, "", false
+	}
+	updatedAt, ok := parseLifecycleTime(values["source_updated_at"])
+	if !ok {
+		return nil, "", nil, "", false
+	}
+	mutationID, _ := values["source_mutation_id"].(string)
+	mutationID = strings.TrimSpace(mutationID)
+	if mutationID == "" || utf8.RuneCountInString(mutationID) > maxSubjectFieldLength {
+		return nil, "", nil, "", false
+	}
+	var effectiveAt *time.Time
+	if rawEffective, exists := values["effective_at"]; exists {
+		parsed, valid := parseLifecycleTime(rawEffective)
+		if !valid {
+			return nil, "", nil, "", false
+		}
+		effectiveAt = &parsed
+	}
+	mergedIntoID, _ := values["merged_into_subject_id"].(string)
+	mergedIntoID = strings.TrimSpace(mergedIntoID)
+	if eventName == "subject_merged" {
+		if mergedIntoID == "" || utf8.RuneCountInString(mergedIntoID) > maxSubjectFieldLength {
+			return nil, "", nil, "", false
+		}
+	} else if mergedIntoID != "" {
+		return nil, "", nil, "", false
+	}
+	return &updatedAt, mutationID, effectiveAt, mergedIntoID, true
+}
+
+// parseLifecycleTime acepta RFC3339 o time.Time y exige offset UTC.
+func parseLifecycleTime(value any) (time.Time, bool) {
+	var parsed time.Time
+	switch typed := value.(type) {
+	case time.Time:
+		parsed = typed
+	case string:
+		value, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(typed))
+		if err != nil {
+			return time.Time{}, false
+		}
+		parsed = value
+	default:
+		return time.Time{}, false
+	}
+	_, offset := parsed.Zone()
+	return parsed, !parsed.IsZero() && offset == 0
 }
 
 // subjectList normaliza las representaciones de slices usadas en JSON y tests.

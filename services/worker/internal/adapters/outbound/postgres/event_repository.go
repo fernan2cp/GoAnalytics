@@ -106,6 +106,16 @@ func persistSubjectDetails(ctx context.Context, tx pgx.Tx, eventRowID int64, ite
 				return err
 			}
 			subjectID = &resolvedID
+			if detail.LifecycleSourceUpdatedAt != nil {
+				applied, err := applySubjectLifecycle(ctx, tx, item, detail, resolvedID)
+				if err != nil {
+					return err
+				}
+				if !applied {
+					detail.NormalizationStatus = subject.NormalizationLifecycleIgnored
+					detail.NormalizationReason = "out_of_order_or_duplicate"
+				}
+			}
 		}
 		inserted, err := insertSubjectDetail(ctx, tx, eventRowID, item, detail, subjectID, emptyToNil(item.IdempotencyKey))
 		if err != nil {
@@ -128,6 +138,44 @@ func persistSubjectDetails(ctx context.Context, tx pgx.Tx, eventRowID int64, ite
 		}
 	}
 	return nil
+}
+
+// applySubjectLifecycle actualiza una identidad solo con una tupla posterior.
+func applySubjectLifecycle(ctx context.Context, tx pgx.Tx, item event.ValidatedEvent, detail subject.EventDetail, subjectID int64) (bool, error) {
+	targetStatus := subject.LifecycleUnknown
+	var mergedIntoSubjectID *int64
+	switch item.EventName {
+	case "subject_deactivated":
+		targetStatus = subject.LifecycleInactive
+	case "subject_reactivated":
+		targetStatus = subject.LifecycleActive
+	case "subject_merged":
+		targetStatus = subject.LifecycleMerged
+		targetDetail := detail
+		targetDetail.ExternalSubjectID = detail.MergedIntoExternalSubjectID
+		targetDetail.InitialLifecycleStatus = subject.LifecycleUnknown
+		targetID, err := upsertSubjectIdentity(ctx, tx, item, targetDetail)
+		if err != nil {
+			return false, err
+		}
+		mergedIntoSubjectID = &targetID
+	default:
+		return false, fmt.Errorf("evento lifecycle desconocido: %s", item.EventName)
+	}
+	var appliedID int64
+	err := tx.QueryRow(ctx, applySubjectLifecycleSQL,
+		subjectID,
+		string(targetStatus),
+		detail.LifecycleSourceUpdatedAt,
+		detail.LifecycleSourceMutationID,
+		detail.LifecycleEffectiveAt,
+		mergedIntoSubjectID,
+		item.ReceivedAt,
+	).Scan(&appliedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // upsertSubjectIdentity converge lazy creation, asociación y futuros backfills.
@@ -599,6 +647,26 @@ SET lifecycle_status = CASE
 		THEN now()
 		ELSE analytics_subjects.updated_at
 	END
+RETURNING id`
+
+const applySubjectLifecycleSQL = `
+UPDATE analytics_subjects
+SET lifecycle_status = $2,
+	lifecycle_source_updated_at = $3,
+	lifecycle_source_mutation_id = $4,
+	lifecycle_effective_at = $5,
+	merged_into_subject_id = $6,
+	status_updated_at = $7,
+	updated_at = now()
+WHERE id = $1
+	AND (
+		lifecycle_source_updated_at IS NULL
+		OR $3 > lifecycle_source_updated_at
+		OR (
+			$3 = lifecycle_source_updated_at
+			AND ($4::text COLLATE "C") > (lifecycle_source_mutation_id COLLATE "C")
+		)
+	)
 RETURNING id`
 
 const insertSubjectDetailSQL = `

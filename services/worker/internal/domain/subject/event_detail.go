@@ -26,23 +26,27 @@ const (
 // TimezoneName son el snapshot calendario aplicado; los IDs contextuales son
 // opcionales hasta habilitar el registro.
 type EventDetail struct {
-	SubjectOrdinal            int
-	SubjectType               string
-	ExternalSubjectID         string
-	Relation                  string
-	OperationType             string
-	OperationID               string
-	ContextDefinitionID       *int64
-	ContextKey                string
-	ContextVersion            *int
-	ClaimedContextFamily      string
-	ResolvedContextFamily     string
-	ContextResolutionStatus   string
-	ContextRegistryRevisionID *int64
-	TimezoneName              string
-	LocalDate                 *time.Time
-	NormalizationStatus       string
-	NormalizationReason       string
-	Metadata                  map[string]any
-	InitialLifecycleStatus    LifecycleStatus
+	SubjectOrdinal              int
+	SubjectType                 string
+	ExternalSubjectID           string
+	Relation                    string
+	OperationType               string
+	OperationID                 string
+	ContextDefinitionID         *int64
+	ContextKey                  string
+	ContextVersion              *int
+	ClaimedContextFamily        string
+	ResolvedContextFamily       string
+	ContextResolutionStatus     string
+	ContextRegistryRevisionID   *int64
+	TimezoneName                string
+	LocalDate                   *time.Time
+	NormalizationStatus         string
+	NormalizationReason         string
+	Metadata                    map[string]any
+	InitialLifecycleStatus      LifecycleStatus
+	LifecycleSourceUpdatedAt    *time.Time
+	LifecycleSourceMutationID   string
+	LifecycleEffectiveAt        *time.Time
+	MergedIntoExternalSubjectID string
 }
