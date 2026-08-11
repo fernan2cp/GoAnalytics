@@ -1,5 +1,8 @@
 # Rollout Y Rollback
 
+> Estado al 2026-08-11: gate técnico del MVP aprobado. La habilitación sigue
+> siendo progresiva por tenant; esta aprobación no activa flags automáticamente.
+
 ## Principios
 
 - Migrations primero, capacidades después.

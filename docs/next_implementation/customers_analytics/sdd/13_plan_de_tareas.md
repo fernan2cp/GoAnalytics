@@ -414,7 +414,7 @@
 
 ### TASK-CA-0408 — Certificar El MVP Y Cerrar El Rollout
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsables:** GoAnalytics y proyecto principal.
 - **Requisitos:** `REQ-CA-001`, `REQ-CA-002`, `REQ-CA-004`, `REQ-CA-005`, `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
 - **Criterios:** `AC-CA-001`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029`, `AC-CA-030`.
@@ -425,7 +425,7 @@
   3. Verificar que todos los flags continúen permitiendo desactivar el MVP sin afectar contratos existentes.
   4. Completar runbooks, alertas, evidencias y matriz final de trazabilidad.
   5. Aprobar el gate del MVP o registrar explícitamente criterios pendientes.
-- **Evidencia:** pendiente: informe de aceptación, trazabilidad completa y acta de habilitación.
+- **Evidencia:** el 2026-08-11 se aprobó la regresión completa de ingest y worker con `go test ./...` y `go vet ./...`, además de 16/16 pruebas SDK. PostgreSQL real aprobó 12 casos de persistencia, concurrencia, lifecycle, proyección, ranking y aislamiento; Redis real aprobó caída/reclamación, mensaje activo, lote inválido, agotamiento y lock tokenizado. El recorrido `TestSubjectMVPEndToEndPersistsProjectsAndSuggestsContext` confirmó asociación → persistencia → proyecciones → sugerencia contextual; las 12 pruebas DragonFullAV confirmaron emisión, catálogo e hidratación/fallback. El perfil máximo produjo 20 tenants, 100.000 sujetos y 500.000 eventos: proyecciones global+contextual en 9,310 s y query p95 17,263 ms; el backfill previo fue 1m11,514 s. Migraciones `001→008`, `008 down/up`, imágenes `subject-jobs` y `query-api`, diff y UTF-8 aprobaron. Todos los flags permanecen apagados por defecto y el rollback detiene binarios/desactiva capacidades sin eliminar tablas. `AC-CA-001`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029` y `AC-CA-030` quedan cubiertos; gate MVP aprobado.
 
 ## 7. Secuencia Crítica
 

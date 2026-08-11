@@ -1,8 +1,8 @@
 # Estado De Implementación
 
-## 1. Estado Inicial
+## 1. Estado Del Paquete
 
-Este tablero representa el estado al crear el SDD. Ninguna tarea del MVP fue implementada como parte de este trabajo documental; por eso todas comienzan en `pending` y toda evidencia de ejecución está pendiente.
+El tablero conserva el baseline inicial y registra la ejecución secuencial completa. Al 2026-08-11 las 28 tareas del MVP están implementadas y aceptadas con evidencia reproducible.
 
 Estados permitidos:
 
@@ -42,7 +42,7 @@ Estados permitidos:
 | 4 | `TASK-CA-0405` | Proyección contextual | GoAnalytics | `done` | Lock, watermark, recomposición atómica y scheduler conjunto validados |
 | 4 | `TASK-CA-0406` | Ranking contextual y fallback | GoAnalytics | `done` | Ranking exacto tenant-first y fallback único a global validados |
 | 4 | `TASK-CA-0407` | Integración contextual principal | Proyecto principal | `done` | DragonFullAV `9554c5e6b`; emisión contextual, hidratación, flags y fallback validados |
-| 4 | `TASK-CA-0408` | Certificar MVP | Ambos proyectos | `pending` | Pendiente |
+| 4 | `TASK-CA-0408` | Certificar MVP | Ambos proyectos | `done` | Regresión, integraciones, E2E, volumen, imágenes y rollback aprobados |
 
 ## 3. Gates De Fase
 
@@ -65,7 +65,23 @@ Estados permitidos:
 | Regresión | ingest y worker completos; 16/16 pruebas SDK |
 | Decisión | gate aprobado; Fase 3 habilitada, capacidades productivas todavía opt-in |
 | Fase 3 → 4 | Proyección global, query API e integración global dentro de SLO | `done` |
-| Cierre MVP | Registro, resolución inicial, ranking contextual, rollout y regresión completa aceptados | `pending` |
+| Cierre MVP | Registro, resolución inicial, ranking contextual, rollout y regresión completa aceptados | `done` |
+
+## 3.2. Certificación Del Cierre MVP
+
+| Dato | Resultado |
+|---|---|
+| Fecha y entorno | 2026-08-11; Go local, PostgreSQL 16 y Redis 7 en Docker Desktop |
+| Regresión | ingest y worker completos con vet; SDK 16/16; DragonFullAV analytics 12/12 |
+| Integración durable | PostgreSQL 12/12 y Redis 13/13 sobre servicios reales |
+| E2E técnico | asociación interna → normalización → global/contexto → sugerencia exacta |
+| Perfil máximo | 20 tenants, 100.000 sujetos, 500.000 eventos |
+| Proyección | 9,310 s global + contextual; objetivo ≤30 min |
+| Query | p95 17,263 ms para `limit=10`; objetivo ≤300 ms |
+| Backfill | 1m11,514 s; objetivo ≤60 min |
+| Artefactos | imágenes `subject-jobs` y `query-api` construidas correctamente |
+| Rollback | flags apagados y detención de binarios; sin down destructivo en producción |
+| Decisión | MVP aprobado para rollout progresivo por tenant |
 
 ## 4. Decisiones Cerradas Para El MVP
 

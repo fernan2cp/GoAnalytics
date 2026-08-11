@@ -10,7 +10,20 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\customers-analyt
 
 Devuelve el checksum SHA-256 y la semilla que deberán acompañar cada reporte.
 
-El runner se incorporará por etapas cuando existan sus superficies reales:
+El runner final se ejecuta contra una base PostgreSQL de referencia aislando su
+dataset en un schema temporal:
+
+```powershell
+$env:POSTGRES_INTEGRATION_DSN='postgres://analytics:analytics@localhost:5433/analytics?sslmode=disable'
+$env:SUBJECT_MVP_VOLUME_TEST='1'
+go test ./services/worker/internal/adapters/outbound/postgres -run TestSubjectMVPVolumeProfile -v -count=1
+```
+
+La prueba genera 20 tenants y 100.000 sujetos, procesa 500.000 asociaciones,
+mide las proyecciones global/contextual y calcula p95 sobre 200 consultas
+reales (100 globales y 100 contextuales) con `limit=10`.
+
+La evolución del runner se completó por etapas:
 
 - `TASK-CA-0204`: generación de snapshot y medición de bootstrap.
 - `TASK-CA-0304`: población global, proyección y consultas con `limit=10`.
