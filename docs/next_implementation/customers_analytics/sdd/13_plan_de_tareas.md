@@ -386,7 +386,7 @@
 
 ### TASK-CA-0406 — Habilitar Ranking Contextual Y Fallback
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-052`, `REQ-CA-053`, `REQ-CA-054`, `REQ-CA-055`, `REQ-CA-056`, `REQ-CA-057`, `REQ-CA-058`, `REQ-CA-059`.
 - **Criterios:** `AC-CA-021`, `AC-CA-022`, `AC-CA-023`, `AC-CA-024`.
@@ -396,7 +396,7 @@
   2. Resolver contexto exacto y aplicar como único fallback el ranking global del tenant.
   3. Conservar orden determinista, límites, frescura y privacidad.
   4. Exponer trazabilidad de fuente de resultado sin claves internas.
-- **Evidencia:** pendiente: pruebas exactas, fallback, sin datos, stale y aislamiento.
+- **Evidencia:** la API exige el par contextual ya validado por el handler, resuelve únicamente una definición activa de la revisión vigente y consulta su agregado tenant-first de 30 días. Si el contexto no existe o no tiene resultados aplica el único fallback permitido al ranking global de 90 días. La respuesta informa `resolution_status`, `source_level` y `fallback_applied`, sin IDs internos ni PII; conserva límites, orden determinista, vacío y política stale existentes. Pruebas cubren exacto y fallback además de autenticación, parámetros, stale y vacío previos; suite completa y `go vet ./...` aprobaron. `AC-CA-021` a `AC-CA-024` quedan cubiertos.
 
 ### TASK-CA-0407 — Integrar Contextos Y Sugerencias En El Proyecto Principal
 

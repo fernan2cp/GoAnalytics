@@ -40,7 +40,7 @@ Estados permitidos:
 | 4 | `TASK-CA-0403` | Resolver contextos al normalizar | GoAnalytics | `done` | Resolución exacta, revisión histórica, inactivos y desconocidos validados |
 | 4 | `TASK-CA-0404` | Resolver históricos iniciales | GoAnalytics | `done` | Job paginado, checkpoint por revisión y reejecución no-op validados |
 | 4 | `TASK-CA-0405` | Proyección contextual | GoAnalytics | `done` | Lock, watermark, recomposición atómica y scheduler conjunto validados |
-| 4 | `TASK-CA-0406` | Ranking contextual y fallback | GoAnalytics | `pending` | Pendiente |
+| 4 | `TASK-CA-0406` | Ranking contextual y fallback | GoAnalytics | `done` | Ranking exacto tenant-first y fallback único a global validados |
 | 4 | `TASK-CA-0407` | Integración contextual principal | Proyecto principal | `pending` | Pendiente |
 | 4 | `TASK-CA-0408` | Certificar MVP | Ambos proyectos | `pending` | Pendiente |
 

@@ -50,3 +50,30 @@ func (repository *SuggestionRepository) GlobalSuggestions(ctx context.Context, t
 	}
 	return results, rows.Err()
 }
+
+// ContextSuggestions devuelve ranking exacto si la definición está activa.
+func (repository *SuggestionRepository) ContextSuggestions(ctx context.Context, tenantID, contextKey string, contextVersion, projectionVersion, windowDays, limit int) ([]subject.Suggestion, bool, error) {
+	var definitionID int64
+	err := repository.pool.QueryRow(ctx, `SELECT d.id FROM analytics_context_registry_revisions r JOIN analytics_context_registry_entries e ON e.registry_revision_id=r.id AND e.status='active' JOIN analytics_context_definitions d ON d.id=e.context_definition_id WHERE r.validation_status='valid' AND r.activated_at IS NOT NULL AND d.context_key=$1 AND d.context_version=$2 ORDER BY r.activated_at DESC LIMIT 1`, contextKey, contextVersion).Scan(&definitionID)
+	if err == pgx.ErrNoRows {
+		return []subject.Suggestion{}, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	rows, err := repository.pool.Query(ctx, `SELECT identity.external_subject_id,sum(daily.association_count)::bigint,max(daily.last_association_at) FROM analytics_subject_context_daily daily JOIN analytics_subjects identity ON identity.id=daily.analytics_subject_id AND identity.tenant_id=daily.tenant_id WHERE daily.tenant_id=$1 AND daily.context_definition_id=$2 AND daily.projection_version=$3 AND identity.lifecycle_status='active' AND daily.local_date>=((now() AT TIME ZONE daily.timezone_name)::date-($4::int-1)) GROUP BY identity.external_subject_id ORDER BY sum(daily.association_count) DESC,max(daily.last_association_at) DESC NULLS LAST,identity.external_subject_id ASC LIMIT $5`, tenantID, definitionID, projectionVersion, windowDays, limit)
+	if err != nil {
+		return nil, true, err
+	}
+	defer rows.Close()
+	results := make([]subject.Suggestion, 0)
+	for rows.Next() {
+		var item subject.Suggestion
+		item.SourceLevel = "context"
+		if err = rows.Scan(&item.ExternalSubjectID, &item.AssociationCount, &item.LastAssociationAt); err != nil {
+			return nil, true, err
+		}
+		results = append(results, item)
+	}
+	return results, true, rows.Err()
+}

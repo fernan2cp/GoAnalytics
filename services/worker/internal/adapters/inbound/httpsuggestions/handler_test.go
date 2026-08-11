@@ -19,6 +19,9 @@ func (repositoryFake) ProjectionAvailability(context.Context, int) (subject.Proj
 func (repositoryFake) GlobalSuggestions(context.Context, string, int, int, int) ([]subject.Suggestion, error) {
 	return []subject.Suggestion{}, nil
 }
+func (repositoryFake) ContextSuggestions(context.Context, string, string, int, int, int, int) ([]subject.Suggestion, bool, error) {
+	return []subject.Suggestion{}, false, nil
+}
 
 func TestHandlerAuthenticatesAndValidatesStrictQuery(t *testing.T) {
 	query := usecases.NewQuerySuggestions(repositoryFake{}, 1, 90, 30, 48*time.Hour, true)

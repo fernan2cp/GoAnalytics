@@ -62,16 +62,32 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 	if stale && !useCase.serveStale {
 		return SuggestionResponse{}, ErrProjectionStale
 	}
-	results, err := useCase.repository.GlobalSuggestions(ctx, query.TenantID, useCase.version, useCase.globalDays, query.Limit)
-	if err != nil {
-		return SuggestionResponse{}, err
+	contextResult := map[string]any{}
+	var results []subject.Suggestion
+	if query.ContextKey != "" {
+		contextual, registered, contextErr := useCase.repository.ContextSuggestions(ctx, query.TenantID, query.ContextKey, query.ContextVersion, useCase.version, useCase.contextDays, query.Limit)
+		if contextErr != nil {
+			return SuggestionResponse{}, contextErr
+		}
+		status := "unregistered"
+		if registered {
+			status = "registered"
+		}
+		if len(contextual) > 0 {
+			results = contextual
+			contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": status, "source_level": "context"}
+		} else {
+			contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": status, "source_level": "global", "fallback_applied": true}
+		}
+	}
+	if results == nil {
+		results, err = useCase.repository.GlobalSuggestions(ctx, query.TenantID, useCase.version, useCase.globalDays, query.Limit)
+		if err != nil {
+			return SuggestionResponse{}, err
+		}
 	}
 	if results == nil {
 		results = []subject.Suggestion{}
-	}
-	contextResult := map[string]any{}
-	if query.ContextKey != "" {
-		contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": "registry_disabled"}
 	}
 	return SuggestionResponse{TenantID: query.TenantID, SubjectType: "customer", Context: contextResult, Window: map[string]int{"context_days": useCase.contextDays, "global_days": useCase.globalDays}, ComputedAt: availability.ComputedAt, ProjectionVersion: availability.ProjectionVersion, IsStale: stale, Results: results}, nil
 }

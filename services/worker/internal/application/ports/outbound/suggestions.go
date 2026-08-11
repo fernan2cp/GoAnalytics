@@ -10,4 +10,5 @@ import (
 type SuggestionRepository interface {
 	ProjectionAvailability(ctx context.Context, version int) (subject.ProjectionAvailability, error)
 	GlobalSuggestions(ctx context.Context, tenantID string, version, windowDays, limit int) ([]subject.Suggestion, error)
+	ContextSuggestions(ctx context.Context, tenantID, contextKey string, contextVersion, projectionVersion, windowDays, limit int) ([]subject.Suggestion, bool, error)
 }
