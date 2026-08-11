@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global o refresh-registry")
+	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global, refresh-registry o resolve-initial-contexts")
 	flag.Parse()
 	if err := run(*mode); err != nil {
 		fmt.Fprintf(os.Stderr, "subject-jobs: %v\n", err)
@@ -24,7 +24,7 @@ func main() {
 }
 
 func run(mode string) error {
-	if mode != "bootstrap" && mode != "project-global" && mode != "refresh-registry" && mode != "serve" {
+	if mode != "bootstrap" && mode != "project-global" && mode != "refresh-registry" && mode != "resolve-initial-contexts" && mode != "serve" {
 		return fmt.Errorf("modo no soportado: %s", mode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -55,6 +55,11 @@ func run(mode string) error {
 		}
 		_, err := container.Registry.Active(ctx)
 		return err
+	case "resolve-initial-contexts":
+		if container.ResolveInitial == nil {
+			return fmt.Errorf("resolución inicial deshabilitada")
+		}
+		return container.ResolveInitial.Run(ctx)
 	default:
 		if container.Scheduler == nil {
 			return fmt.Errorf("scheduler de proyección deshabilitado")

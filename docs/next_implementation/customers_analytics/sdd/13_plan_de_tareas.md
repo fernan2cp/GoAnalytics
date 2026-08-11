@@ -358,7 +358,7 @@
 
 ### TASK-CA-0404 — Resolver Históricos Iniciales De Forma Idempotente
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-049`.
 - **Criterios:** `AC-CA-015`, `AC-CA-019`.
@@ -368,7 +368,7 @@
   2. Seleccionar solo filas previas sin revisión resuelta y procesarlas por páginas.
   3. Persistir checkpoint reanudable y resultado idempotente.
   4. Marcar días afectados para recomputación sin iniciar conciliación general.
-- **Evidencia:** pendiente: pruebas de reanudación, segunda ejecución no-op y conteos afectados.
+- **Evidencia:** `subject-jobs --mode resolve-initial-contexts` carga la revisión activa y procesa únicamente asociaciones sin revisión mediante páginas ordenadas por ID y `FOR UPDATE SKIP LOCKED`. Cada página clasifica activos, inactivos, desconocidos e incompletos, actualiza `updated_at` para señalar días afectados y confirma el checkpoint por revisión en la misma transacción. La reanudación parte del último ID durable y una segunda ejecución sin filas es no-op. Pruebas unitarias cubren reanudación y agotamiento; suite completa y `go vet ./...` aprobaron. `AC-CA-015` y `AC-CA-019` quedan cubiertos.
 
 ### TASK-CA-0405 — Implementar Proyección Contextual
 

@@ -20,13 +20,14 @@ import (
 
 // SubjectJobsContainer agrupa recursos exclusivos del binario de jobs.
 type SubjectJobsContainer struct {
-	Postgres      *pgxpool.Pool
-	Bootstrap     *usecases.BootstrapSubjects
-	ProjectGlobal *usecases.ProjectGlobal
-	Scheduler     *usecases.ProjectionScheduler
-	Registry      *usecases.ContextRegistryLoader
-	Redis         *goredis.Client
-	Health        http.Handler
+	Postgres       *pgxpool.Pool
+	Bootstrap      *usecases.BootstrapSubjects
+	ProjectGlobal  *usecases.ProjectGlobal
+	Scheduler      *usecases.ProjectionScheduler
+	Registry       *usecases.ContextRegistryLoader
+	ResolveInitial *usecases.ResolveInitialContexts
+	Redis          *goredis.Client
+	Health         http.Handler
 }
 
 // NewSubjectJobsContainer construye el cliente, repositorio y caso de uso.
@@ -96,6 +97,18 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 		}
 		container.Redis = redisClient
 		container.Registry = usecases.NewContextRegistryLoader(cache, cache, repository, source)
+		resolutionRepository, resolutionErr := postgresadapter.NewContextResolutionRepository(pool)
+		if resolutionErr != nil {
+			pool.Close()
+			_ = redisClient.Close()
+			return nil, resolutionErr
+		}
+		container.ResolveInitial, err = usecases.NewResolveInitialContexts(resolutionRepository, container.Registry, config.SubjectProjectionBatchSize)
+		if err != nil {
+			pool.Close()
+			_ = redisClient.Close()
+			return nil, err
+		}
 	}
 	ready := httphealth.NewReadyHandler(pool.Ping)
 	operational := httphealth.NewRouterWithMetrics(httphealth.NewHealthHandler(), ready, metrics.Handler())
