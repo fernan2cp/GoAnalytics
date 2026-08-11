@@ -74,6 +74,8 @@ func TestLoadConfigAcceptsCompleteSubjectFeatureChain(t *testing.T) {
 	t.Setenv("SUBJECT_PROJECTION_ENABLED", "true")
 	t.Setenv("SUBJECT_CONTEXT_REGISTRY_ENABLED", "true")
 	t.Setenv("SUBJECT_QUERY_API_ENABLED", "true")
+	t.Setenv("SUBJECT_SNAPSHOT_URL", "http://principal/internal/analytics/subjects/snapshot")
+	t.Setenv("SUBJECT_SOURCE_TOKEN", "source-secret")
 
 	config, err := LoadConfig("")
 	if err != nil {
@@ -104,6 +106,10 @@ func clearSubjectFeatureFlags(t *testing.T) {
 		"SUBJECT_PROJECTION_ENABLED",
 		"SUBJECT_CONTEXT_REGISTRY_ENABLED",
 		"SUBJECT_QUERY_API_ENABLED",
+		"SUBJECT_SNAPSHOT_URL",
+		"SUBJECT_SOURCE_TOKEN",
+		"SUBJECT_SNAPSHOT_TIMEOUT_MS",
+		"SUBJECT_BOOTSTRAP_PAGE_SIZE",
 	} {
 		t.Setenv(key, "")
 	}

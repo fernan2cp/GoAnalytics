@@ -1,10 +1,13 @@
 package outbound
 
 const (
-	MetricRedisPendingEvents  = "redis_pending_events_count"
-	MetricRedisAutoclaim      = "redis_autoclaim_total"
-	MetricRedisRetryExhausted = "redis_retry_exhausted_total"
-	MetricEventPersistence    = "event_persistence_outcomes_total"
+	MetricRedisPendingEvents       = "redis_pending_events_count"
+	MetricRedisAutoclaim           = "redis_autoclaim_total"
+	MetricRedisRetryExhausted      = "redis_retry_exhausted_total"
+	MetricEventPersistence         = "event_persistence_outcomes_total"
+	MetricSubjectBootstrapPages    = "subject_bootstrap_pages_total"
+	MetricSubjectBootstrapSubjects = "subject_bootstrap_subjects_total"
+	MetricSubjectBootstrapDuration = "subject_bootstrap_duration_seconds"
 )
 
 // Metrics define el puerto de observabilidad numerica del worker.

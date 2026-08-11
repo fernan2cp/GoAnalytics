@@ -65,6 +65,10 @@ type Config struct {
 	SubjectProjectionEnabled      bool
 	SubjectContextRegistryEnabled bool
 	SubjectQueryAPIEnabled        bool
+	SubjectSnapshotURL            string
+	SubjectSourceToken            string
+	SubjectSnapshotTimeout        time.Duration
+	SubjectBootstrapPageSize      int
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -108,10 +112,14 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		SiteResolverToken:   getEnv("SITE_RESOLVER_TOKEN", ""),
 		SiteResolverTimeout: 300 * time.Millisecond,
 
-		SiteRehydrateCooldown: 300 * time.Second,
-		SiteNegativeCacheTTL:  300 * time.Second,
-		SiteCacheTTL:          time.Hour,
-		DeduplicationTTL:      24 * time.Hour,
+		SiteRehydrateCooldown:    300 * time.Second,
+		SiteNegativeCacheTTL:     300 * time.Second,
+		SiteCacheTTL:             time.Hour,
+		DeduplicationTTL:         24 * time.Hour,
+		SubjectSnapshotURL:       getEnv("SUBJECT_SNAPSHOT_URL", ""),
+		SubjectSourceToken:       getEnv("SUBJECT_SOURCE_TOKEN", ""),
+		SubjectSnapshotTimeout:   5 * time.Second,
+		SubjectBootstrapPageSize: 500,
 	}
 
 	var err error
@@ -180,6 +188,12 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.SubjectQueryAPIEnabled, err = getEnvBool("SUBJECT_QUERY_API_ENABLED", false); err != nil {
 		return Config{}, err
 	}
+	if config.SubjectSnapshotTimeout, err = getEnvMillis("SUBJECT_SNAPSHOT_TIMEOUT_MS", config.SubjectSnapshotTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectBootstrapPageSize, err = getEnvInt("SUBJECT_BOOTSTRAP_PAGE_SIZE", config.SubjectBootstrapPageSize); err != nil {
+		return Config{}, err
+	}
 	if err := config.validateSubjectFeatures(); err != nil {
 		return Config{}, err
 	}
@@ -195,6 +209,12 @@ func LoadConfig(dotenvPath string) (Config, error) {
 func (config Config) validateSubjectFeatures() error {
 	if config.SubjectBootstrapEnabled && !config.SubjectAnalyticsEnabled {
 		return fmt.Errorf("SUBJECT_BOOTSTRAP_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
+	}
+	if config.SubjectBootstrapEnabled && (strings.TrimSpace(config.SubjectSnapshotURL) == "" || strings.TrimSpace(config.SubjectSourceToken) == "") {
+		return fmt.Errorf("SUBJECT_BOOTSTRAP_ENABLED requiere SUBJECT_SNAPSHOT_URL y SUBJECT_SOURCE_TOKEN")
+	}
+	if config.SubjectBootstrapPageSize < 1 || config.SubjectBootstrapPageSize > 500 {
+		return fmt.Errorf("SUBJECT_BOOTSTRAP_PAGE_SIZE debe estar entre 1 y 500")
 	}
 	if config.SubjectProjectionEnabled && !config.SubjectAnalyticsEnabled {
 		return fmt.Errorf("SUBJECT_PROJECTION_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")

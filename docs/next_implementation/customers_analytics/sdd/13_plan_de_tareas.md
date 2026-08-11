@@ -196,7 +196,7 @@
 
 ### TASK-CA-0202 — Crear Cliente De Snapshot Y Bootstrap En `subject-jobs`
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-028`, `REQ-CA-030`, `REQ-CA-031`.
 - **Criterios:** `AC-CA-012`, `AC-CA-013`.
@@ -207,7 +207,7 @@
   3. Persistir progreso por tenant y revisión para reanudar sin duplicar.
   4. Reiniciar de forma controlada ante `snapshot_revision_expired`.
   5. Aplicar timeouts, reintentos acotados y métricas de avance.
-- **Evidencia:** pendiente: pruebas con servidor simulado y reinicios del proceso.
+- **Evidencia:** `cmd/subject-jobs -mode bootstrap` se construye como proceso separado y exige la cadena opt-in completa. El cliente HTTP usa Bearer, timeout configurable, páginas de hasta 500 y tres intentos acotados ante transporte, 429 o 5xx; valida de forma estricta revision, lifecycle y timestamps. El caso de uso reanuda cursor/revisión desde `analytics_subject_bootstrap`, aplica cada página y checkpoint en una transacción, reinicia como máximo dos veces ante `snapshot_revision_expired` y conserva el error final. El repositorio converge identidades tenant-first con precedencia monotónica y soporta merged mediante destino técnico. Pruebas con servidor simulado cubren auth, cursor, contrato, retry y 409; fakes cubren reanudación, reinicio y agotamiento. `go test ./...`, `go vet ./...`, `git diff --check` y UTF-8 aprobaron.
 
 ### TASK-CA-0203 — Hacer Converger Backfill, Lazy Creation Y Lifecycle
 
