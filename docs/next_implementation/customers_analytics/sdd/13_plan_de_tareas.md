@@ -255,7 +255,7 @@
 
 ### TASK-CA-0302 — Implementar Proyector Global Incremental
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`.
 - **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`.
@@ -266,7 +266,7 @@
   3. Recalcular días completos afectados y reemplazarlos atómicamente.
   4. Agregar ventana global de 90 días solo para sujetos elegibles.
   5. Avanzar checkpoint únicamente después de publicar agregados y ejecución exitosa.
-- **Evidencia:** pendiente: pruebas de tardíos, recomputación, crash y concurrencia.
+- **Evidencia:** `ProjectGlobal` obtiene un advisory lock dedicado por nombre+versión, recupera el checkpoint `updated_at + id`, lee lotes ordenados, deduplica claves diarias y publica recomputación absoluta junto con el nuevo checkpoint en una transacción. El repositorio elimina la fila anterior antes del `INSERT SELECT`, por lo que también limpia agregados que quedan en cero o pierden elegibilidad; solo identidades active participan. Un run interrumpido se marca failed al recuperar el lock y recomienza desde el último checkpoint durable; lock ocupado registra `skipped_locked`. Pruebas unitarias cubren lotes, fallo previo al checkpoint y lock omitido. PostgreSQL real verificó repetición no-op, evento tardío incorporado sin doble conteo y exclusión entre dos conexiones. Suite worker y vet aprobaron.
 
 ### TASK-CA-0303 — Programar Proyección En `subject-jobs`
 

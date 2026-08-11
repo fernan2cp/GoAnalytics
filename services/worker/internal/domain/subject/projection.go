@@ -31,3 +31,11 @@ type ProjectionRun struct {
 	StartedAt   time.Time
 	CompletedAt *time.Time
 }
+
+// AffectedDay identifica una clave diaria que debe recalcularse completa.
+type AffectedDay struct {
+	TenantID     string
+	SubjectID    int64
+	LocalDate    time.Time
+	TimezoneName string
+}

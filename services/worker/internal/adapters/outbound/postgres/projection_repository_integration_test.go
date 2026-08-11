@@ -5,6 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"goanalytics/services/worker/internal/application/ports/outbound"
+	"goanalytics/services/worker/internal/application/usecases"
+	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/subject"
 )
 
@@ -48,6 +51,70 @@ func TestProjectionRepositoryIntegrationPersistsRunCheckpointAndAggregate(t *tes
 	}
 	if count != 3 {
 		t.Fatalf("association_count=%d", count)
+	}
+}
+
+func TestProjectionRepositoryIntegrationRecomputesLateEventsIdempotently(t *testing.T) {
+	events, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, projectionIntegrationSchemaSQL); err != nil {
+		t.Fatal(err)
+	}
+	first := integrationValidatedEvent("projection-association-1")
+	first.EventName = "subject_associated"
+	first.EventSource = "server"
+	first.IdempotencyKey = "association-1"
+	first.SubjectDetails = []subject.EventDetail{integrationSubjectDetail("customer-ranking", subject.LifecycleActive)}
+	assertPersistenceStatus(t, events.SaveBatch(ctx, []event.ValidatedEvent{first}), outbound.EventPersistenceInserted)
+	repository, _ := NewProjectionRepository(pool)
+	projector, err := usecases.NewProjectGlobal(repository, nil, 1, 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = projector.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = projector.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.EventID = "projection-association-2"
+	second.IdempotencyKey = "association-2"
+	second.EventTime = first.EventTime.Add(-48 * time.Hour)
+	assertPersistenceStatus(t, events.SaveBatch(ctx, []event.ValidatedEvent{second}), outbound.EventPersistenceInserted)
+	if err = projector.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	if err = pool.QueryRow(ctx, `SELECT association_count FROM analytics_subject_tenant_daily WHERE tenant_id='tenant-1'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 {
+		t.Fatalf("association_count=%d", count)
+	}
+}
+
+func TestProjectionRepositoryIntegrationAdvisoryLockIsExclusive(t *testing.T) {
+	_, pool := newIntegrationEventRepository(t)
+	repository, _ := NewProjectionRepository(pool)
+	ctx := context.Background()
+	first, acquired, err := repository.TryLock(ctx, "subject_global", 1)
+	if err != nil || !acquired {
+		t.Fatalf("first acquired=%v err=%v", acquired, err)
+	}
+	_, secondAcquired, err := repository.TryLock(ctx, "subject_global", 1)
+	if err != nil || secondAcquired {
+		t.Fatalf("second acquired=%v err=%v", secondAcquired, err)
+	}
+	if err = first.Release(ctx); err != nil {
+		t.Fatal(err)
+	}
+	third, thirdAcquired, err := repository.TryLock(ctx, "subject_global", 1)
+	if err != nil || !thirdAcquired {
+		t.Fatalf("third acquired=%v err=%v", thirdAcquired, err)
+	}
+	if err = third.Release(ctx); err != nil {
+		t.Fatal(err)
 	}
 }
 
