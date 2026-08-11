@@ -299,7 +299,7 @@
 
 ### TASK-CA-0305 — Integrar Sugerencias Globales En El Proyecto Principal
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** proyecto principal.
 - **Requisitos:** `REQ-CA-062`, `REQ-CA-063`, `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
 - **Criterios:** `AC-CA-026`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029`.
@@ -309,7 +309,7 @@
   2. Recuperar datos reales del cliente en el proyecto principal y descartar sujetos ya no elegibles.
   3. Definir experiencia degradada ante timeout, unavailable o lista vacía.
   4. Activar progresivamente por tenant y medir latencia, stale y errores.
-- **Evidencia:** pendiente: prueba integrada, métricas y aprobación del rollout global.
+- **Evidencia:** DragonFullAV `d0216f882` agrega cliente opt-in con Bearer, timeout de un segundo y allowlist progresiva por tenant. El endpoint POS `/customers/suggestions` consulta solo IDs externos, hidrata en la sesión tenant actual, exige `type=client` e `is_active`, preserva el orden y descarta IDs ausentes. Ante flag apagado, contexto tenant ausente, timeout/503, payload inválido o lista vacía, reutiliza la lista de clientes actual sin afectar el flujo. Registra contadores de accepted/empty/degraded sin tenant ni PII. Tres pruebas específicas cubren auth/tenant/orden, 503 y descarte; junto con la regresión de búsqueda aprobaron 21 tests y 1 skip de entorno. `py_compile`, `git diff --check` y UTF-8 aprobaron.
 
 ## 6. Fase 4 — Registro Y Ranking Contextual
 

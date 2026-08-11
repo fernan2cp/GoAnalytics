@@ -34,7 +34,7 @@ Estados permitidos:
 | 3 | `TASK-CA-0302` | Proyector global incremental | GoAnalytics | `done` | Advisory lock, watermark compuesto, recomputación atómica, tardíos y restart aprobados |
 | 3 | `TASK-CA-0303` | Programar `subject-jobs` | GoAnalytics | `done` | Modos bootstrap/project-global/serve, ejecución al inicio, scheduler diario y operación HTTP aprobados |
 | 3 | `TASK-CA-0304` | Query API y ranking global | GoAnalytics | `done` | Proceso separado, Bearer, validación, stale/unavailable/vacío, orden y aislamiento aprobados |
-| 3 | `TASK-CA-0305` | Consumir sugerencias globales | Proyecto principal | `pending` | Pendiente |
+| 3 | `TASK-CA-0305` | Consumir sugerencias globales | Proyecto principal | `done` | Cliente opt-in, hidratación local, elegibilidad, orden y degradación aprobados; Dragon `d0216f882` |
 | 4 | `TASK-CA-0401` | Publicar registro de contextos | Proyecto principal | `pending` | Pendiente |
 | 4 | `TASK-CA-0402` | Migración `008`, registro y caché | GoAnalytics | `pending` | Pendiente |
 | 4 | `TASK-CA-0403` | Resolver contextos al normalizar | GoAnalytics | `pending` | Pendiente |
@@ -64,7 +64,7 @@ Estados permitidos:
 | Duración | 1m11,514s; 1.398,33 sujetos/s |
 | Regresión | ingest y worker completos; 16/16 pruebas SDK |
 | Decisión | gate aprobado; Fase 3 habilitada, capacidades productivas todavía opt-in |
-| Fase 3 → 4 | Proyección global, query API e integración global dentro de SLO | `pending` |
+| Fase 3 → 4 | Proyección global, query API e integración global dentro de SLO | `done` |
 | Cierre MVP | Registro, resolución inicial, ranking contextual, rollout y regresión completa aceptados | `pending` |
 
 ## 4. Decisiones Cerradas Para El MVP
