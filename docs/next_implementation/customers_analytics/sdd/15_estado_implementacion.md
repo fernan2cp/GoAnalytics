@@ -35,7 +35,7 @@ Estados permitidos:
 | 3 | `TASK-CA-0303` | Programar `subject-jobs` | GoAnalytics | `done` | Modos bootstrap/project-global/serve, ejecución al inicio, scheduler diario y operación HTTP aprobados |
 | 3 | `TASK-CA-0304` | Query API y ranking global | GoAnalytics | `done` | Proceso separado, Bearer, validación, stale/unavailable/vacío, orden y aislamiento aprobados |
 | 3 | `TASK-CA-0305` | Consumir sugerencias globales | Proyecto principal | `done` | Cliente opt-in, hidratación local, elegibilidad, orden y degradación aprobados; Dragon `d0216f882` |
-| 4 | `TASK-CA-0401` | Publicar registro de contextos | Proyecto principal | `pending` | Pendiente |
+| 4 | `TASK-CA-0401` | Publicar registro de contextos | Proyecto principal | `done` | Siete familias, revisión estable, inmutabilidad, ciclos y endpoint autenticado aprobados; Dragon `1c576f810` |
 | 4 | `TASK-CA-0402` | Migración `008`, registro y caché | GoAnalytics | `pending` | Pendiente |
 | 4 | `TASK-CA-0403` | Resolver contextos al normalizar | GoAnalytics | `pending` | Pendiente |
 | 4 | `TASK-CA-0404` | Resolver históricos iniciales | GoAnalytics | `pending` | Pendiente |

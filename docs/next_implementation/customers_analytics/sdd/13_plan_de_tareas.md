@@ -315,7 +315,7 @@
 
 ### TASK-CA-0401 — Publicar El Registro Desde El Proyecto Principal
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** proyecto principal.
 - **Requisitos:** `REQ-CA-040`, `REQ-CA-041`, `REQ-CA-042`, `REQ-CA-043`.
 - **Criterios:** `AC-CA-017`.
@@ -325,7 +325,7 @@
   2. Publicar las siete familias MVP y definiciones inmutables por clave y versión.
   3. Asociar estado activo/inactivo a una revisión concreta.
   4. Rechazar ciclos, referencias inexistentes y mutaciones de una definición publicada.
-- **Evidencia:** pendiente: contrato, fixtures válidos/inválidos y pruebas de revisión.
+- **Evidencia:** DragonFullAV `1c576f810` versiona un JSON canónico con siete definiciones, una por familia MVP, identidades `context_key + context_version`, padres y estado. El cargador valida forma estricta, duplicados, familias completas, referencias, ciclos e inmutabilidad semántica entre revisiones; solo status puede variar para una definición publicada y registry_version debe avanzar. `registry_revision` deriva de SHA-256 canónico y es estable para el mismo payload. `GET /internal/analytics/context-registry` es opt-in, usa Bearer dedicado y devuelve 503 si el archivo desplegado es inválido. Diez pruebas aprobaron catálogo, revisión, padre inexistente, ciclo, mutación, auth y regresión de analytics interno; sintaxis, diff y UTF-8 aprobaron.
 
 ### TASK-CA-0402 — Crear Migración `008` Y Repositorio Revisionado
 
