@@ -107,6 +107,66 @@ func TestEventRepositoryIntegrationPersistsEventSource(t *testing.T) {
 	}
 }
 
+func TestSubjectBootstrapIntegrationConvergesWithLazyCreation(t *testing.T) {
+	events, pool := newIntegrationEventRepository(t)
+	bootstrap, err := NewSubjectBootstrapRepository(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	state, err := bootstrap.BeginOrResume(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	web := integrationValidatedEvent("bootstrap-lazy")
+	web.SubjectDetails = []subject.EventDetail{integrationSubjectDetail("customer-bootstrap", subject.LifecycleUnknown)}
+	page := subject.SnapshotPage{SourceRevision: "revision-1", Rows: []subject.SnapshotRow{{TenantID: "tenant-1", ExternalSubjectID: "customer-bootstrap", LifecycleStatus: subject.LifecycleActive, SourceUpdatedAt: time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC), SourceMutationID: "snapshot-1"}}}
+	errors := make(chan error, 2)
+	go func() { result := events.SaveBatch(ctx, []event.ValidatedEvent{web}); errors <- result[0].Err }()
+	go func() { _, applyErr := bootstrap.ApplyPage(ctx, state, page); errors <- applyErr }()
+	for range 2 {
+		if err := <-errors; err != nil {
+			t.Fatal(err)
+		}
+	}
+	var count int
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT count(*),max(lifecycle_status) FROM analytics_subjects WHERE tenant_id='tenant-1' AND external_subject_id='customer-bootstrap'`).Scan(&count, &status); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || status != "active" {
+		t.Fatalf("count=%d status=%s", count, status)
+	}
+}
+
+func TestSubjectBootstrapIntegrationDoesNotDegradeNewerLifecycle(t *testing.T) {
+	events, pool := newIntegrationEventRepository(t)
+	bootstrap, _ := NewSubjectBootstrapRepository(pool)
+	ctx := context.Background()
+	newerAt := time.Date(2026, 8, 9, 12, 0, 0, 0, time.UTC)
+	lifecycle := integrationValidatedEvent("lifecycle-newer-than-snapshot")
+	lifecycle.EventName = "subject_deactivated"
+	lifecycle.EventSource = "server"
+	detail := integrationLifecycleDetail("customer-order", newerAt, "mutation-20")
+	lifecycle.SubjectDetails = []subject.EventDetail{detail}
+	assertPersistenceStatus(t, events.SaveBatch(ctx, []event.ValidatedEvent{lifecycle}), outbound.EventPersistenceInserted)
+	state, err := bootstrap.BeginOrResume(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	older := subject.SnapshotPage{SourceRevision: "revision-old", Rows: []subject.SnapshotRow{{TenantID: "tenant-1", ExternalSubjectID: "customer-order", LifecycleStatus: subject.LifecycleActive, SourceUpdatedAt: newerAt.Add(-time.Hour), SourceMutationID: "mutation-99"}}}
+	if _, err = bootstrap.ApplyPage(ctx, state, older); err != nil {
+		t.Fatal(err)
+	}
+	var status, mutation string
+	if err = pool.QueryRow(ctx, `SELECT lifecycle_status,lifecycle_source_mutation_id FROM analytics_subjects WHERE tenant_id='tenant-1' AND external_subject_id='customer-order'`).Scan(&status, &mutation); err != nil {
+		t.Fatal(err)
+	}
+	if status != "inactive" || mutation != "mutation-20" {
+		t.Fatalf("status=%s mutation=%s", status, mutation)
+	}
+}
+
 func TestEventRepositoryIntegrationNormalizesSubjectsTenantFirst(t *testing.T) {
 	repository, pool := newIntegrationEventRepository(t)
 	ctx := context.Background()
@@ -418,4 +478,20 @@ CREATE TABLE analytics_event_subjects (
 CREATE UNIQUE INDEX ux_event_subjects_tenant_idempotency
 ON analytics_event_subjects(tenant_id,event_name,idempotency_key,subject_type,external_subject_id,relation)
 WHERE idempotency_key IS NOT NULL AND idempotency_key <> '';
+CREATE TABLE analytics_subject_bootstrap (
+    id BIGSERIAL PRIMARY KEY,
+    subject_type TEXT NOT NULL,
+    tenant_id TEXT,
+    status TEXT NOT NULL,
+    cursor TEXT,
+    source_revision TEXT,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    processed_count BIGINT NOT NULL DEFAULT 0,
+    failed_count BIGINT NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ux_subject_bootstrap_running ON analytics_subject_bootstrap(subject_type) WHERE status='running';
 `

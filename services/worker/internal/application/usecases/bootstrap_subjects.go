@@ -56,6 +56,10 @@ func (useCase *BootstrapSubjects) Run(ctx context.Context) error {
 		}
 		state, err = useCase.repo.ApplyPage(ctx, state, page)
 		if err != nil {
+			_ = useCase.repo.Fail(ctx, state, err.Error())
+			if useCase.metrics != nil {
+				useCase.metrics.IncrementCounter(outbound.MetricSubjectBootstrapPages, map[string]string{"status": "error"})
+			}
 			return err
 		}
 		if useCase.metrics != nil {

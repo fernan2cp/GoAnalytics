@@ -211,7 +211,7 @@
 
 ### TASK-CA-0203 — Hacer Converger Backfill, Lazy Creation Y Lifecycle
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-018`, `REQ-CA-020`, `REQ-CA-022`, `REQ-CA-023`, `REQ-CA-024`, `REQ-CA-029`, `REQ-CA-030`, `REQ-CA-031`.
 - **Criterios:** `AC-CA-009`, `AC-CA-010`, `AC-CA-013`.
@@ -221,7 +221,7 @@
   2. Evitar degradar un estado más nuevo con datos atrasados del snapshot.
   3. Registrar filas procesadas, no-op, errores recuperables y errores definitivos.
   4. Verificar estados active, inactive y merged y la elegibilidad resultante.
-- **Evidencia:** pendiente: pruebas concurrentes entre asociación, lazy creation y backfill.
+- **Evidencia:** el repositorio de bootstrap reutiliza la identidad única `tenant_id + subject_type + external_subject_id` y aplica lifecycle únicamente cuando la tupla `source_updated_at + source_mutation_id` supera la existente. Cada página y su checkpoint se confirman en una sola transacción; una falla conserva el checkpoint previo, marca la ejecución failed y emite resultado de página. La integración PostgreSQL real verificó creación lazy concurrente con backfill sin duplicados y resultado active, además de lifecycle inactive más nuevo que no fue degradado por un snapshot atrasado. Active, inactive y merged comparten la misma ruta; merged crea/reutiliza su destino técnico antes del origen. Las pruebas focales aprobaron contra `go-analytics-postgres` y la suite unitaria conserva reanudación, errores y revisión expirada.
 
 ### TASK-CA-0204 — Ejecutar Y Certificar El Backfill Inicial
 

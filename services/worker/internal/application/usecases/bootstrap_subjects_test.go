@@ -28,6 +28,7 @@ type bootstrapRepoFake struct {
 	applied   int
 	restarted int
 	failed    string
+	applyErr  error
 }
 
 func (fake *bootstrapRepoFake) BeginOrResume(context.Context) (subject.BootstrapState, error) {
@@ -35,9 +36,21 @@ func (fake *bootstrapRepoFake) BeginOrResume(context.Context) (subject.Bootstrap
 }
 func (fake *bootstrapRepoFake) ApplyPage(_ context.Context, state subject.BootstrapState, page subject.SnapshotPage) (subject.BootstrapState, error) {
 	fake.applied++
+	if fake.applyErr != nil {
+		return state, fake.applyErr
+	}
 	state.Cursor = page.NextCursor
 	state.SourceRevision = page.SourceRevision
 	return state, nil
+}
+
+func TestBootstrapSubjectsPersistsApplyFailure(t *testing.T) {
+	source := &snapshotSourceFake{pages: []subject.SnapshotPage{{SourceRevision: "r1"}}}
+	repo := &bootstrapRepoFake{state: subject.BootstrapState{ID: 1}, applyErr: errors.New("postgres unavailable")}
+	useCase, _ := NewBootstrapSubjects(source, repo, nil, 100)
+	if err := useCase.Run(context.Background()); err == nil || repo.failed == "" {
+		t.Fatalf("err=%v failed=%q", err, repo.failed)
+	}
 }
 func (fake *bootstrapRepoFake) RestartExpired(context.Context, subject.BootstrapState) (subject.BootstrapState, error) {
 	fake.restarted++

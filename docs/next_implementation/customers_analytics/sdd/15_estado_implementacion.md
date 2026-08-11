@@ -28,7 +28,7 @@ Estados permitidos:
 | 1 | `TASK-CA-0106` | Emisión desde proyecto principal | Proyecto principal | `done` | Emisor post-commit opt-in, retry directo, idempotencia, lifecycle y degradación aprobados; Dragon `2747c0fdf` |
 | 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `done` | Corte inmutable por 2 h, cursor firmado, límite 500, auth y expiración aprobados; Dragon `923a7d221` |
 | 2 | `TASK-CA-0202` | Cliente de snapshot y bootstrap | GoAnalytics | `done` | `subject-jobs`, cliente con retry, checkpoint transaccional, reanudación y revisión expirada aprobados |
-| 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `pending` | Pendiente |
+| 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `done` | Unicidad tenant-first, precedencia monotónica y carreras lazy/backfill/lifecycle aprobadas en PostgreSQL real |
 | 2 | `TASK-CA-0204` | Certificar backfill inicial | Ambos proyectos | `pending` | Pendiente |
 | 3 | `TASK-CA-0301` | Migración `007` y repositorios | GoAnalytics | `pending` | Pendiente |
 | 3 | `TASK-CA-0302` | Proyector global incremental | GoAnalytics | `pending` | Pendiente |
