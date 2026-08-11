@@ -20,7 +20,7 @@ Estados permitidos:
 | 0 | `TASK-CA-0003` | Flags, configuración y migración `005` | GoAnalytics | `done` | Migración `005` up/down desde vacío y `004`; matriz opt-in aprobada |
 | 0 | `TASK-CA-0004` | Extender resolver de sites | Ambos proyectos | `done` | Contrato Go/Dragon, caché legacy, server sin origin y timezone IANA aprobados; Dragon `4bcf56d13` |
 | 0 | `TASK-CA-0005` | Preparar operación y rendimiento | GoAnalytics | `done` | Métricas/health, dashboard, alertas, runbook, imágenes y perfil de carga preparados |
-| 1 | `TASK-CA-0101` | Modelo de sujetos y migración `006` | GoAnalytics | `pending` | Pendiente |
+| 1 | `TASK-CA-0101` | Modelo de sujetos y migración `006` | GoAnalytics | `done` | Migración `006` up/down, convergencia concurrente, restricciones tenant-first e invariantes de dominio aprobadas |
 | 1 | `TASK-CA-0102` | Endpoint interno de eventos | GoAnalytics | `pending` | Pendiente |
 | 1 | `TASK-CA-0103` | Propagar origen, timezone y trazabilidad | GoAnalytics | `pending` | Pendiente |
 | 1 | `TASK-CA-0104` | Normalización 1:N tenant-first | GoAnalytics | `pending` | Pendiente |

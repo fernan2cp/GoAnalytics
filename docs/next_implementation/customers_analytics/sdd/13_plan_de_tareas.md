@@ -90,7 +90,7 @@
 
 ### TASK-CA-0101 — Crear Modelo De Sujetos Y Migración `006`
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-003`, `REQ-CA-018`, `REQ-CA-019`, `REQ-CA-020`, `REQ-CA-021`.
 - **Criterios:** `AC-CA-008`, `AC-CA-009`.
@@ -101,7 +101,7 @@
   3. Incorporar estados, precedencia lifecycle, estado/motivo de normalización, revisión y timezone aplicadas.
   4. Incorporar unicidades de asociación necesarias para convergencia y reprocesamiento.
   5. Limitar el tipo habilitado a `customer` sin impedir extensiones aditivas futuras.
-- **Evidencia:** pendiente: migración up/down, restricciones e invariantes del dominio.
+- **Evidencia:** la migración `006` se aplicó con `golang-migrate` sobre PostgreSQL 16 desde base vacía y desde versión `005`; su `down` eliminó simétricamente las tres tablas en ambos recorridos. Dos inserciones concurrentes con `ON CONFLICT` convergieron en una identidad tenant-first. PostgreSQL rechazó tipo distinto de `customer`, merge sin destino y una segunda asociación con igual idempotency key recibida desde otro site del tenant. El dominio define identidad, estados lifecycle y validaciones estables; `go test ./...` aprobó toda la suite del worker, incluidas sus pruebas focales.
 
 ### TASK-CA-0102 — Crear `POST /v1/internal/events`
 
