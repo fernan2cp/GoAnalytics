@@ -10,6 +10,7 @@ import (
 
 	"goanalytics/services/worker/internal/adapters/inbound/httphealth"
 	"goanalytics/services/worker/internal/adapters/inbound/redisstream"
+	"goanalytics/services/worker/internal/adapters/outbound/httpregistry"
 	"goanalytics/services/worker/internal/adapters/outbound/httpresolver"
 	loggeradapter "goanalytics/services/worker/internal/adapters/outbound/logger"
 	metricsadapter "goanalytics/services/worker/internal/adapters/outbound/metrics"
@@ -93,6 +94,19 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 	}
 
 	metricsRegistry := metricsadapter.NewRegistry()
+	var contextRegistry *usecases.ContextRegistryLoader
+	if config.SubjectContextRegistryEnabled {
+		registryCache := redisadapter.NewContextRegistryCache(redisClient, config.SubjectContextRegistryTTL, config.SubjectContextRegistryLockTTL)
+		registryRepository, registryErr := postgresadapter.NewContextRegistryRepository(pgPool)
+		if registryErr != nil {
+			return nil, registryErr
+		}
+		registrySource, registryErr := httpregistry.NewClient(config.SubjectContextRegistryURL, config.SubjectContextRegistryToken, config.SubjectContextRegistryTimeout)
+		if registryErr != nil {
+			return nil, registryErr
+		}
+		contextRegistry = usecases.NewContextRegistryLoader(registryCache, registryCache, registryRepository, registrySource)
+	}
 	process := usecases.NewProcessEventsUseCaseWithFeatures(
 		nil,
 		eventRepository,
@@ -105,7 +119,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		usecases.RehydrateSiteOptions{SiteCacheTTL: config.SiteCacheTTL},
 		config.SemanticDedupRules,
 		metricsRegistry,
-		usecases.ProcessFeatures{SubjectNormalizationEnabled: config.SubjectAnalyticsEnabled},
+		usecases.ProcessFeatures{SubjectNormalizationEnabled: config.SubjectAnalyticsEnabled, ContextRegistry: contextRegistry},
 	)
 	consumer, err := redisstream.NewConsumerWithMetrics(redisClient, redisstream.Config{
 		StreamName:            config.EventStreamName,

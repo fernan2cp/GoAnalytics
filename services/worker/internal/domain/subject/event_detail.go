@@ -18,6 +18,14 @@ const (
 
 	// ContextRegistryDisabled indica que todavía no se consultó el registro.
 	ContextRegistryDisabled = "registry_disabled"
+	// ContextRegistered indica una definición activa y resuelta.
+	ContextRegistered = "registered"
+	// ContextUnregistered indica una identidad ausente del registro.
+	ContextUnregistered = "unregistered"
+	// ContextInactive indica una definición publicada pero inactiva.
+	ContextInactive = "inactive_context"
+	// ContextFamilyUnresolved indica una declaración contextual incompleta.
+	ContextFamilyUnresolved = "family_unresolved"
 )
 
 // EventDetail representa un sujeto normalizado dentro de un evento crudo.

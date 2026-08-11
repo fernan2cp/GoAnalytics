@@ -71,4 +71,17 @@ func (registry *ContextRegistry) Validate() error {
 	return nil
 }
 
+// Resolve busca una identidad exacta dentro de esta revisión.
+//
+// Recibe clave y versión publicadas. Devuelve la definición, su presencia y
+// no realiza fallback por familia ni por versión.
+func (registry ContextRegistry) Resolve(key string, version int) (ContextDefinition, bool) {
+	for _, definition := range registry.Contexts {
+		if definition.ContextKey == key && definition.ContextVersion == version {
+			return definition, true
+		}
+	}
+	return ContextDefinition{}, false
+}
+
 func contextIdentity(key string, version int) string { return fmt.Sprintf("%s\x00%d", key, version) }

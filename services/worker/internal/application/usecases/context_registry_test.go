@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/subject"
 	"testing"
 )
@@ -11,6 +12,31 @@ type registryCacheFake struct {
 	value subject.ContextRegistry
 	ok    bool
 	saved int
+}
+
+func TestResolveSubjectContextsClassifiesExactInactiveAndUnknown(t *testing.T) {
+	version := 1
+	registry := validRegistry()
+	registry.ID = 9
+	registry.Contexts[0].ID = 7
+	registry.Contexts = append(registry.Contexts, subject.ContextDefinition{ID: 8, ContextKey: "support", ContextVersion: 1, ContextFamily: "support", Status: "inactive"})
+	loader := NewContextRegistryLoader(&registryCacheFake{value: registry, ok: true}, &registryLockFake{}, &registryRepoFake{}, &registrySourceFake{})
+	useCase := &ProcessEventsUseCase{contextRegistry: loader}
+	value := event.ValidatedEvent{Context: map[string]any{"_goanalytics": map[string]any{}}, SubjectDetails: []subject.EventDetail{
+		{ContextKey: "search", ContextVersion: &version, NormalizationStatus: subject.NormalizationNormalized},
+		{ContextKey: "support", ContextVersion: &version, NormalizationStatus: subject.NormalizationNormalized},
+		{ContextKey: "missing", ContextVersion: &version, NormalizationStatus: subject.NormalizationNormalized},
+	}}
+	useCase.resolveSubjectContexts(context.Background(), &value)
+	if value.SubjectDetails[0].ContextResolutionStatus != subject.ContextRegistered || *value.SubjectDetails[0].ContextDefinitionID != 7 {
+		t.Fatalf("contexto activo = %#v", value.SubjectDetails[0])
+	}
+	if value.SubjectDetails[1].ContextResolutionStatus != subject.ContextInactive || value.SubjectDetails[2].ContextResolutionStatus != subject.ContextUnregistered {
+		t.Fatalf("clasificaciones = %#v", value.SubjectDetails)
+	}
+	if value.Context["_goanalytics"].(map[string]any)["context_registry_revision"] != "r1" {
+		t.Fatalf("snapshot = %#v", value.Context)
+	}
 }
 
 func (fake *registryCacheFake) Load(context.Context) (subject.ContextRegistry, bool, error) {

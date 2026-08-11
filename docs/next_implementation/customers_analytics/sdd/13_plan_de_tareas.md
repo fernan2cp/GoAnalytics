@@ -344,7 +344,7 @@
 
 ### TASK-CA-0403 — Resolver Contextos Durante La Normalización
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-016`, `REQ-CA-047`, `REQ-CA-048`.
 - **Criterios:** `AC-CA-007`, `AC-CA-019`.
@@ -354,7 +354,7 @@
   2. Guardar revisión y resultado de resolución en la asociación normalizada.
   3. Enviar contextos desconocidos a pendientes y mantener su aporte global.
   4. Excluir contextos desconocidos o inactivos del agregado contextual.
-- **Evidencia:** pendiente: pruebas de revisión histórica, desconocidos e inactivos.
+- **Evidencia:** el procesamiento opt-in consulta la revisión activa, resuelve exclusivamente `context_key + context_version` y persiste IDs de definición/revisión, familia resuelta y snapshot de revisión. Las definiciones inactivas quedan auditadas pero fuera del agregado contextual; las desconocidas se acumulan idempotentemente en pendientes y mantienen intacta su contribución global. La indisponibilidad del registro no impide persistir el evento crudo. Pruebas focales cubren activo, inactivo, desconocido y snapshot; suite completa y `go vet ./...` aprobaron. `AC-CA-007` y `AC-CA-019` quedan cubiertos para eventos nuevos.
 
 ### TASK-CA-0404 — Resolver Históricos Iniciales De Forma Idempotente
 

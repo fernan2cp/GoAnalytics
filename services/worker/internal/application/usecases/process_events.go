@@ -11,6 +11,7 @@ import (
 	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/rejection"
 	"goanalytics/services/worker/internal/domain/site"
+	"goanalytics/services/worker/internal/domain/subject"
 )
 
 // Errores de aplicacion devueltos por el procesamiento del worker.
@@ -46,12 +47,15 @@ type ProcessEventsUseCase struct {
 	semanticRules               []SemanticDedupRule
 	metrics                     outbound.Metrics
 	subjectNormalizationEnabled bool
+	contextRegistry             *ContextRegistryLoader
 }
 
 // ProcessFeatures controla capacidades opt-in del procesamiento crítico.
 type ProcessFeatures struct {
 	// SubjectNormalizationEnabled habilita detalles 1:N de sujetos.
 	SubjectNormalizationEnabled bool
+	// ContextRegistry habilita resolución exacta sin alterar eventos legacy.
+	ContextRegistry *ContextRegistryLoader
 }
 
 // NewProcessEventsUseCase crea el caso de uso de procesamiento de eventos.
@@ -168,6 +172,7 @@ func NewProcessEventsUseCaseWithFeatures(
 		semanticRules:               semanticRules,
 		metrics:                     metrics,
 		subjectNormalizationEnabled: features.SubjectNormalizationEnabled,
+		contextRegistry:             features.ContextRegistry,
 	}
 }
 
@@ -232,6 +237,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		validEvent := buildValidatedEvent(raw, config, dedupStrategy)
 		if uc.subjectNormalizationEnabled {
 			validEvent.SubjectDetails = normalizeSubjectDetails(validEvent)
+			uc.resolveSubjectContexts(ctx, &validEvent)
 		}
 		validEvent.ItemDetails = buildItemDetails(validEvent)
 		validEvent.OrderDetail = buildOrderDetail(validEvent)
@@ -305,6 +311,46 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		}
 	}
 	return nil
+}
+
+// resolveSubjectContexts aplica la revisión activa a los detalles válidos.
+//
+// Ante indisponibilidad conserva el evento y deja el estado sin resolver; el
+// registro nunca convierte un fallo auxiliar en pérdida del evento crudo.
+func (uc *ProcessEventsUseCase) resolveSubjectContexts(ctx context.Context, valid *event.ValidatedEvent) {
+	if uc.contextRegistry == nil || valid == nil {
+		return
+	}
+	registry, err := uc.contextRegistry.Active(ctx)
+	if err != nil {
+		return
+	}
+	if snapshot, ok := valid.Context["_goanalytics"].(map[string]any); ok {
+		snapshot["context_registry_revision"] = registry.RegistryRevision
+	}
+	for index := range valid.SubjectDetails {
+		detail := &valid.SubjectDetails[index]
+		if detail.NormalizationStatus != subject.NormalizationNormalized {
+			continue
+		}
+		detail.ContextRegistryRevisionID = &registry.ID
+		if detail.ContextKey == "" || detail.ContextVersion == nil {
+			detail.ContextResolutionStatus = subject.ContextFamilyUnresolved
+			continue
+		}
+		definition, found := registry.Resolve(detail.ContextKey, *detail.ContextVersion)
+		if !found {
+			detail.ContextResolutionStatus = subject.ContextUnregistered
+			continue
+		}
+		detail.ContextDefinitionID = &definition.ID
+		detail.ResolvedContextFamily = definition.ContextFamily
+		if definition.Status == "inactive" {
+			detail.ContextResolutionStatus = subject.ContextInactive
+		} else {
+			detail.ContextResolutionStatus = subject.ContextRegistered
+		}
+	}
 }
 
 // recordPersistenceOutcome registra un resultado durable con labels acotados.

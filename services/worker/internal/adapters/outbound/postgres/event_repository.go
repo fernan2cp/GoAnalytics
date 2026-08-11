@@ -237,6 +237,12 @@ func insertSubjectDetail(
 		emptyToNil(detail.NormalizationReason),
 		string(metadata),
 	).Scan(&detailID)
+	if err == nil && detail.ContextResolutionStatus == subject.ContextUnregistered && detail.ContextVersion != nil {
+		_, pendingErr := tx.Exec(ctx, upsertUnregisteredContextSQL, detail.ContextKey, *detail.ContextVersion, emptyToNil(detail.ClaimedContextFamily), item.EventTime)
+		if pendingErr != nil {
+			return false, pendingErr
+		}
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -689,6 +695,11 @@ INSERT INTO analytics_event_subjects (
 )
 ON CONFLICT DO NOTHING
 RETURNING id`
+
+const upsertUnregisteredContextSQL = `
+INSERT INTO analytics_unregistered_contexts(context_key,context_version,claimed_context_family,first_seen_at,last_seen_at,event_count,reconciliation_status)
+VALUES($1,$2,$3,$4,$4,1,'pending')
+ON CONFLICT(context_key,context_version) DO UPDATE SET last_seen_at=GREATEST(analytics_unregistered_contexts.last_seen_at,EXCLUDED.last_seen_at),event_count=analytics_unregistered_contexts.event_count+1,claimed_context_family=COALESCE(analytics_unregistered_contexts.claimed_context_family,EXCLUDED.claimed_context_family),reconciliation_status='pending'`
 
 const selectConflictingEventSQL = `
 SELECT

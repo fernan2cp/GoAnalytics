@@ -35,6 +35,27 @@ func (repository *ContextRegistryRepository) LoadActive(ctx context.Context) (su
 	if err = json.Unmarshal(payload, &registry); err != nil {
 		return registry, false, err
 	}
+	rows, err := repository.pool.Query(ctx, `SELECT d.id,d.context_key,d.context_version FROM analytics_context_registry_entries e JOIN analytics_context_definitions d ON d.id=e.context_definition_id WHERE e.registry_revision_id=$1`, registry.ID)
+	if err != nil {
+		return registry, false, err
+	}
+	defer rows.Close()
+	ids := map[string]int64{}
+	for rows.Next() {
+		var id int64
+		var key string
+		var version int
+		if err = rows.Scan(&id, &key, &version); err != nil {
+			return registry, false, err
+		}
+		ids[fmt.Sprintf("%s\x00%d", key, version)] = id
+	}
+	if err = rows.Err(); err != nil {
+		return registry, false, err
+	}
+	for index := range registry.Contexts {
+		registry.Contexts[index].ID = ids[fmt.Sprintf("%s\x00%d", registry.Contexts[index].ContextKey, registry.Contexts[index].ContextVersion)]
+	}
 	return registry, true, nil
 }
 
@@ -115,6 +136,9 @@ func (repository *ContextRegistryRepository) PersistValid(ctx context.Context, r
 		return registry, err
 	}
 	registry.ID = revisionID
+	for index := range registry.Contexts {
+		registry.Contexts[index].ID = definitionIDs[fmt.Sprintf("%s\x00%d", registry.Contexts[index].ContextKey, registry.Contexts[index].ContextVersion)]
+	}
 	return registry, nil
 }
 
