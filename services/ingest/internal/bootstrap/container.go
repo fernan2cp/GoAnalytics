@@ -80,6 +80,11 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		},
 	)
 	eventsHandler := inboundhttp.NewIngestHandler(useCase, appLogger, config.MaxEventPayloadBytes, config.HideAuthFailures)
+	var internalEventsHandler *inboundhttp.InternalIngestHandler
+	if config.SubjectInternalEventsEnabled {
+		internalUseCase := usecases.NewIngestInternalEventsUseCase(publisher, system.Clock{}, config.MaxEventsPerBatch)
+		internalEventsHandler = inboundhttp.NewInternalIngestHandler(internalUseCase, appLogger, config.MaxEventPayloadBytes, config.SubjectEventsAPIToken)
+	}
 	readyHandler := inboundhttp.NewReadyHandler(func(ctx context.Context) error {
 		return redisClient.Ping(ctx).Err()
 	})
@@ -88,7 +93,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		Config:      config,
 		RedisClient: redisClient,
 		Logger:      appLogger,
-		Handler:     inboundhttp.NewRouter(eventsHandler, inboundhttp.NewHealthHandler(), readyHandler, config.AllowedOrigins),
+		Handler:     inboundhttp.NewRouterWithInternal(eventsHandler, internalEventsHandler, inboundhttp.NewHealthHandler(), readyHandler, config.AllowedOrigins),
 	}, nil
 }
 

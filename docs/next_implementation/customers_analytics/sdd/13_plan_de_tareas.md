@@ -105,7 +105,7 @@
 
 ### TASK-CA-0102 — Crear `POST /v1/internal/events`
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-011`, `REQ-CA-012`, `REQ-CA-013`, `REQ-CA-016`, `REQ-CA-017`.
 - **Criterios:** `AC-CA-005`, `AC-CA-007`, `AC-CA-020`.
@@ -116,7 +116,7 @@
   3. No exigir sesión, navegación ni `origin`; exigir los campos del perfil server.
   4. Publicar al mismo Redis Stream con `event_source=server` y sin alterar el endpoint web.
   5. Aplicar límites de tamaño, validación estricta y errores estables.
-- **Evidencia:** pendiente: pruebas HTTP, contrato versionado y regresión de `POST /v1/events`.
+- **Evidencia:** `POST /v1/internal/events` quedó registrado únicamente con `SUBJECT_INTERNAL_EVENTS_ENABLED=true`, exige `SUBJECT_EVENTS_API_TOKEN` separado y compara su digest en tiempo constante. El mapper acepta objeto o batch de hasta 50 eventos, rechaza campos desconocidos —incluidos navegación y `event_source` aportado— y valida el catálogo versionado `event_version=1`, uno a cien sujetos, asociación, lifecycle y merge. El caso de uso publica `event_source=server` mediante el mismo puerto Redis sin inventar sesión, origin, URL ni path; el flujo público fija `event_source=web`. Pruebas HTTP cubren `202`, `401`, `404`, límite de bytes y errores JSON estables; `make test` aprobó ingest y worker sin cambios incompatibles en `POST /v1/events`.
 
 ### TASK-CA-0103 — Propagar Origen, Zona Horaria Y Trazabilidad
 

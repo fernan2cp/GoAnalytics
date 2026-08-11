@@ -47,6 +47,9 @@ func TestIngestValidPublishesEnrichedEvents(t *testing.T) {
 	if published.SDKName != "goanalytics-web" || published.SDKVersion != "1.0.0" {
 		t.Fatalf("SDK metadata = %q/%q, want goanalytics-web/1.0.0", published.SDKName, published.SDKVersion)
 	}
+	if published.EventSource != event.SourceWeb {
+		t.Fatalf("EventSource = %q, esperado web", published.EventSource)
+	}
 	if published.Properties == nil || published.Context == nil {
 		t.Fatalf("Properties y Context deben publicarse como mapas no nulos")
 	}

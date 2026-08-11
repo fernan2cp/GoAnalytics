@@ -140,6 +140,7 @@ func (uc *IngestEventsUseCase) Ingest(ctx context.Context, request dto.IngestReq
 			TabID:                  item.TabID,
 			Sequence:               item.Sequence,
 			PreviousLogicalEventID: item.PreviousLogicalEventID,
+			EventSource:            event.SourceWeb,
 			SiteCode:               claims.SiteCode,
 			Environment:            claims.Environment,
 			TokenVersion:           claims.TokenVersion,
