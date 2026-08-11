@@ -30,7 +30,7 @@ Estados permitidos:
 | 2 | `TASK-CA-0202` | Cliente de snapshot y bootstrap | GoAnalytics | `done` | `subject-jobs`, cliente con retry, checkpoint transaccional, reanudación y revisión expirada aprobados |
 | 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `done` | Unicidad tenant-first, precedencia monotónica y carreras lazy/backfill/lifecycle aprobadas en PostgreSQL real |
 | 2 | `TASK-CA-0204` | Certificar backfill inicial | Ambos proyectos | `done` | 100.000 sujetos en 1m11,514s; reanudación al 50 %, completitud y cero duplicados aprobados |
-| 3 | `TASK-CA-0301` | Migración `007` y repositorios | GoAnalytics | `pending` | Pendiente |
+| 3 | `TASK-CA-0301` | Migración `007` y repositorios | GoAnalytics | `done` | Migración 007 up/down y repositorio transaccional de runs, checkpoint y agregado aprobados |
 | 3 | `TASK-CA-0302` | Proyector global incremental | GoAnalytics | `pending` | Pendiente |
 | 3 | `TASK-CA-0303` | Programar `subject-jobs` | GoAnalytics | `pending` | Pendiente |
 | 3 | `TASK-CA-0304` | Query API y ranking global | GoAnalytics | `pending` | Pendiente |

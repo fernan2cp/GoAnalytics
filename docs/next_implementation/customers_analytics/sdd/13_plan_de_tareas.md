@@ -241,7 +241,7 @@
 
 ### TASK-CA-0301 — Crear Migración `007` Y Repositorios De Proyección
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-003`, `REQ-CA-032`, `REQ-CA-035`, `REQ-CA-036`, `REQ-CA-037`, `REQ-CA-038`, `REQ-CA-039`.
 - **Criterios:** `AC-CA-014`, `AC-CA-015`, `AC-CA-016`.
@@ -251,7 +251,7 @@
   2. Definir unicidades para reemplazo idempotente por tenant, día y sujeto.
   3. Crear índices tenant-first para watermark, ventanas y ranking.
   4. Incluir `association_count` y `last_association_at`.
-- **Evidencia:** pendiente: migración up/down, explain plans y pruebas de repositorios.
+- **Evidencia:** la migración `007_create_subject_global_projections` crea runs, checkpoint compuesto y agregado diario global con FK cascade, PK tenant-first, restricciones de estados/conteos y unicidad parcial de una ejecución running. Los índices cubren historial de runs, ranking diario y ventana por tenant/versión/fecha. El repositorio PostgreSQL registra complete/failed, carga checkpoint cero, reemplaza agregados absolutos y avanza el watermark en la misma transacción. La cadena 001→007, down 007 y up 007 aprobaron en una base temporal aislada; la base fue eliminada después. La integración real verificó run, agregado, `last_association_at`, checkpoint y finalización; `go test ./...` y `go vet ./...` aprobaron.
 
 ### TASK-CA-0302 — Implementar Proyector Global Incremental
 
