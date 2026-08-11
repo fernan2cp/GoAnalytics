@@ -29,7 +29,7 @@ Estados permitidos:
 | 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `done` | Corte inmutable por 2 h, cursor firmado, límite 500, auth y expiración aprobados; Dragon `923a7d221` |
 | 2 | `TASK-CA-0202` | Cliente de snapshot y bootstrap | GoAnalytics | `done` | `subject-jobs`, cliente con retry, checkpoint transaccional, reanudación y revisión expirada aprobados |
 | 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `done` | Unicidad tenant-first, precedencia monotónica y carreras lazy/backfill/lifecycle aprobadas en PostgreSQL real |
-| 2 | `TASK-CA-0204` | Certificar backfill inicial | Ambos proyectos | `pending` | Pendiente |
+| 2 | `TASK-CA-0204` | Certificar backfill inicial | Ambos proyectos | `done` | 100.000 sujetos en 1m11,514s; reanudación al 50 %, completitud y cero duplicados aprobados |
 | 3 | `TASK-CA-0301` | Migración `007` y repositorios | GoAnalytics | `pending` | Pendiente |
 | 3 | `TASK-CA-0302` | Proyector global incremental | GoAnalytics | `pending` | Pendiente |
 | 3 | `TASK-CA-0303` | Programar `subject-jobs` | GoAnalytics | `pending` | Pendiente |
@@ -50,7 +50,20 @@ Estados permitidos:
 |---|---|---|
 | Fase 0 → 1 | Pendientes recuperables, conflictos aislados, migración `005`, resolver aditivo y flags seguros | `done` |
 | Fase 1 → 2 | Endpoint interno, identidad, normalización, lifecycle y emisor post-commit aceptados | `done` |
-| Fase 2 → 3 | Snapshot estable, bootstrap reanudable y backfill certificado | `pending` |
+| Fase 2 → 3 | Snapshot estable, bootstrap reanudable y backfill certificado | `done` |
+
+## 3.1. Certificación Del Gate De Fase 2
+
+| Dato | Resultado |
+|---|---|
+| Fecha y entorno | 2026-08-11, PostgreSQL local `go-analytics-postgres` |
+| Comando | `SUBJECT_VOLUME_TEST=1 go test ./internal/adapters/outbound/postgres -run TestSubjectBootstrapVolume100k -v -count=1` |
+| Volumen | 20 tenants, 100.000 clientes, páginas de 500 |
+| Distribución | 90.000 active, 10.000 inactive |
+| Reanudación | checkpoint exacto en 50.000 y continuación sin duplicados |
+| Duración | 1m11,514s; 1.398,33 sujetos/s |
+| Regresión | ingest y worker completos; 16/16 pruebas SDK |
+| Decisión | gate aprobado; Fase 3 habilitada, capacidades productivas todavía opt-in |
 | Fase 3 → 4 | Proyección global, query API e integración global dentro de SLO | `pending` |
 | Cierre MVP | Registro, resolución inicial, ranking contextual, rollout y regresión completa aceptados | `pending` |
 

@@ -225,7 +225,7 @@
 
 ### TASK-CA-0204 — Ejecutar Y Certificar El Backfill Inicial
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsables:** GoAnalytics y proyecto principal.
 - **Requisitos:** `REQ-CA-030`, `REQ-CA-031`, `REQ-CA-064`, `REQ-CA-066`.
 - **Criterios:** `AC-CA-013`, `AC-CA-027`, `AC-CA-029`.
@@ -235,7 +235,7 @@
   2. Verificar completitud por estado, tenant y revisión.
   3. Confirmar reanudación después de una interrupción y ausencia de duplicados.
   4. Registrar duración, throughput, errores y decisión de habilitación de la fase siguiente.
-- **Evidencia:** pendiente: reporte firmado de backfill y checklist de gate.
+- **Evidencia:** el 2026-08-11 se ejecutó `TestSubjectBootstrapVolume100k` contra el contenedor local `go-analytics-postgres`: 100.000 sujetos en 1m11,514s, throughput 1.398,33 sujetos/s y margen amplio frente al SLO de 60 minutos. La prueba interrumpió y reconstruyó el repositorio al llegar a 50.000; `BeginOrResume` recuperó cursor, revisión y conteo exactos. El resultado final tuvo 100.000 identidades distintas, 90.000 active, 10.000 inactive, cero duplicados y checkpoint completed en 100.000. `make test`, vet de ingest/worker y las 16 pruebas del SDK aprobaron. El gate Fase 2 → 3 queda habilitado con flags aún apagados por defecto.
 
 ## 5. Fase 3 — Proyección Diaria Y Ranking Global
 
