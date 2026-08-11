@@ -12,6 +12,7 @@ import (
 
 	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/domain/event"
+	"goanalytics/services/worker/internal/domain/subject"
 )
 
 // EventRepository persiste eventos validos en PostgreSQL.
@@ -75,6 +76,9 @@ func (repository *EventRepository) saveOne(ctx context.Context, item event.Valid
 		status, existingEventID, conflictField, err := classifyEventConflict(ctx, tx, item)
 		return status, existingEventID, conflictField, err
 	}
+	if err := persistSubjectDetails(ctx, tx, eventRowID, item); err != nil {
+		return "", "", "", err
+	}
 	if err := replaceItemDetails(ctx, tx, eventRowID, item.ItemDetails); err != nil {
 		return "", "", "", err
 	}
@@ -85,6 +89,110 @@ func (repository *EventRepository) saveOne(ctx context.Context, item event.Valid
 		return "", "", "", err
 	}
 	return outbound.EventPersistenceInserted, "", "", nil
+}
+
+// persistSubjectDetails guarda identidades y detalles dentro de la transacción.
+//
+// Los estados semánticos se insertan sin FK de sujeto. Para contribuciones
+// válidas crea o reutiliza la identidad tenant-first y promueve unknown a
+// active solo ante una asociación interna. Los conflictos funcionales se
+// convierten en una fila idempotency_conflict y no abortan el evento crudo.
+func persistSubjectDetails(ctx context.Context, tx pgx.Tx, eventRowID int64, item event.ValidatedEvent) error {
+	for _, detail := range item.SubjectDetails {
+		var subjectID *int64
+		if detail.NormalizationStatus == subject.NormalizationNormalized || detail.NormalizationStatus == subject.NormalizationTimezoneUnresolved {
+			resolvedID, err := upsertSubjectIdentity(ctx, tx, item, detail)
+			if err != nil {
+				return err
+			}
+			subjectID = &resolvedID
+		}
+		inserted, err := insertSubjectDetail(ctx, tx, eventRowID, item, detail, subjectID, emptyToNil(item.IdempotencyKey))
+		if err != nil {
+			return err
+		}
+		if inserted {
+			continue
+		}
+		if item.IdempotencyKey == "" {
+			return fmt.Errorf("conflicto inesperado de detalle sin idempotency_key")
+		}
+		detail.NormalizationStatus = subject.NormalizationIdempotencyConflict
+		detail.NormalizationReason = "tenant_idempotency_conflict"
+		auditInserted, err := insertSubjectDetail(ctx, tx, eventRowID, item, detail, subjectID, nil)
+		if err != nil {
+			return err
+		}
+		if !auditInserted {
+			return fmt.Errorf("no se pudo auditar conflicto funcional de sujeto")
+		}
+	}
+	return nil
+}
+
+// upsertSubjectIdentity converge lazy creation, asociación y futuros backfills.
+func upsertSubjectIdentity(ctx context.Context, tx pgx.Tx, item event.ValidatedEvent, detail subject.EventDetail) (int64, error) {
+	var subjectID int64
+	err := tx.QueryRow(ctx, upsertSubjectIdentitySQL,
+		item.TenantID,
+		detail.SubjectType,
+		detail.ExternalSubjectID,
+		string(detail.InitialLifecycleStatus),
+		item.ReceivedAt,
+	).Scan(&subjectID)
+	return subjectID, err
+}
+
+// insertSubjectDetail intenta guardar una contribución o auditoría normalizada.
+func insertSubjectDetail(
+	ctx context.Context,
+	tx pgx.Tx,
+	eventRowID int64,
+	item event.ValidatedEvent,
+	detail subject.EventDetail,
+	subjectID *int64,
+	idempotencyKey any,
+) (bool, error) {
+	metadata, err := json.Marshal(nonNilMap(detail.Metadata))
+	if err != nil {
+		return false, err
+	}
+	var detailID int64
+	err = tx.QueryRow(ctx, insertSubjectDetailSQL,
+		eventRowID,
+		detail.SubjectOrdinal,
+		item.EventID,
+		emptyToNil(item.LogicalEventID),
+		idempotencyKey,
+		item.TenantID,
+		item.SiteID,
+		normalizeEventSource(item.EventSource),
+		item.EventName,
+		item.EventTime,
+		item.ReceivedAt,
+		subjectID,
+		detail.SubjectType,
+		detail.ExternalSubjectID,
+		detail.Relation,
+		emptyToNil(detail.OperationType),
+		emptyToNil(detail.OperationID),
+		detail.ContextDefinitionID,
+		emptyToNil(detail.ContextKey),
+		detail.ContextVersion,
+		emptyToNil(detail.ClaimedContextFamily),
+		emptyToNil(detail.ResolvedContextFamily),
+		detail.ContextResolutionStatus,
+		detail.ContextRegistryRevisionID,
+		emptyToNil(detail.TimezoneName),
+		detail.LocalDate,
+		detail.NormalizationStatus,
+		emptyToNil(detail.NormalizationReason),
+		string(metadata),
+	).Scan(&detailID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 // saveValidatedEvent intenta insertar la fila base sin sobrescribir duplicados.
@@ -466,6 +574,50 @@ INSERT INTO analytics_events (
 	$17, $18, $19, $20, $21, $22, $23, $24,
 	$25, $26, $27, $28, $29::jsonb, $30::jsonb,
 	$31
+)
+ON CONFLICT DO NOTHING
+RETURNING id`
+
+const upsertSubjectIdentitySQL = `
+INSERT INTO analytics_subjects (
+	tenant_id, subject_type, external_subject_id, lifecycle_status,
+	status_updated_at
+) VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, subject_type, external_subject_id) DO UPDATE
+SET lifecycle_status = CASE
+		WHEN analytics_subjects.lifecycle_status = 'unknown' AND EXCLUDED.lifecycle_status = 'active'
+		THEN 'active'
+		ELSE analytics_subjects.lifecycle_status
+	END,
+	status_updated_at = CASE
+		WHEN analytics_subjects.lifecycle_status = 'unknown' AND EXCLUDED.lifecycle_status = 'active'
+		THEN EXCLUDED.status_updated_at
+		ELSE analytics_subjects.status_updated_at
+	END,
+	updated_at = CASE
+		WHEN analytics_subjects.lifecycle_status = 'unknown' AND EXCLUDED.lifecycle_status = 'active'
+		THEN now()
+		ELSE analytics_subjects.updated_at
+	END
+RETURNING id`
+
+const insertSubjectDetailSQL = `
+INSERT INTO analytics_event_subjects (
+	analytics_event_id, subject_ordinal, client_event_id, logical_event_id,
+	idempotency_key, tenant_id, site_id, event_source, event_name, event_time,
+	received_at, analytics_subject_id, subject_type, external_subject_id,
+	relation, operation_type, operation_id, context_definition_id, context_key,
+	context_version, claimed_context_family, resolved_context_family,
+	context_resolution_status, context_registry_revision_id, timezone_name,
+	local_date, normalization_status, normalization_reason, metadata
+) VALUES (
+	$1, $2, $3, $4,
+	$5, $6, $7, $8, $9, $10,
+	$11, $12, $13, $14,
+	$15, $16, $17, $18, $19,
+	$20, $21, $22,
+	$23, $24, $25,
+	$26, $27, $28, $29::jsonb
 )
 ON CONFLICT DO NOTHING
 RETURNING id`

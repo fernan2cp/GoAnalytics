@@ -93,7 +93,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 	}
 
 	metricsRegistry := metricsadapter.NewRegistry()
-	process := usecases.NewProcessEventsUseCaseWithMetrics(
+	process := usecases.NewProcessEventsUseCaseWithFeatures(
 		nil,
 		eventRepository,
 		rejectedRepository,
@@ -105,6 +105,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		usecases.RehydrateSiteOptions{SiteCacheTTL: config.SiteCacheTTL},
 		config.SemanticDedupRules,
 		metricsRegistry,
+		usecases.ProcessFeatures{SubjectNormalizationEnabled: config.SubjectAnalyticsEnabled},
 	)
 	consumer, err := redisstream.NewConsumerWithMetrics(redisClient, redisstream.Config{
 		StreamName:            config.EventStreamName,

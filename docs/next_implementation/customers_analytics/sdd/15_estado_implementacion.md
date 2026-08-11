@@ -23,7 +23,7 @@ Estados permitidos:
 | 1 | `TASK-CA-0101` | Modelo de sujetos y migración `006` | GoAnalytics | `done` | Migración `006` up/down, convergencia concurrente, restricciones tenant-first e invariantes de dominio aprobadas |
 | 1 | `TASK-CA-0102` | Endpoint interno de eventos | GoAnalytics | `done` | Bearer dedicado, esquema server estricto, publicación al stream compartido y regresión pública aprobados |
 | 1 | `TASK-CA-0103` | Propagar origen, timezone y trazabilidad | GoAnalytics | `done` | Recorrido web/server, resolución tenant/site, snapshot timezone/source y persistencia trazable aprobados |
-| 1 | `TASK-CA-0104` | Normalización 1:N tenant-first | GoAnalytics | `pending` | Pendiente |
+| 1 | `TASK-CA-0104` | Normalización 1:N tenant-first | GoAnalytics | `done` | Normalización opt-in, atomicidad, convergencia concurrente, fallos semánticos e idempotencia entre sites aprobados |
 | 1 | `TASK-CA-0105` | Lifecycle monotónico y merge | GoAnalytics | `pending` | Pendiente |
 | 1 | `TASK-CA-0106` | Emisión desde proyecto principal | Proyecto principal | `pending` | Pendiente |
 | 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `pending` | Pendiente |

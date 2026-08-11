@@ -1,6 +1,10 @@
 package event
 
-import "time"
+import (
+	"time"
+
+	"goanalytics/services/worker/internal/domain/subject"
+)
 
 // ValidatedEvent representa un evento validado y listo para persistencia.
 //
@@ -46,4 +50,5 @@ type ValidatedEvent struct {
 	Context                map[string]any
 	ItemDetails            []ItemDetail
 	OrderDetail            *OrderDetail
+	SubjectDetails         []subject.EventDetail
 }

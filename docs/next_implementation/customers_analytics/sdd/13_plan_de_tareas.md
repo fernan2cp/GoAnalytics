@@ -134,7 +134,7 @@
 
 ### TASK-CA-0104 — Implementar Normalización 1:N Tenant-First
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-004`, `REQ-CA-016`, `REQ-CA-018`, `REQ-CA-019`, `REQ-CA-025`.
 - **Criterios:** `AC-CA-007`, `AC-CA-008`, `AC-CA-011`.
@@ -145,7 +145,7 @@
   3. Aplicar idempotencia funcional en todo el tenant aunque el hecho llegue desde distintos sites.
   4. Persistir `normalization_status/reason` sin impedir el guardado del evento crudo.
   5. Registrar revisión de contexto y timezone utilizadas.
-- **Evidencia:** pendiente: pruebas unitarias, entre sites, reprocesamiento y fallos semánticos.
+- **Evidencia:** con `SUBJECT_ANALYTICS_ENABLED=false` el worker no genera escrituras de sujetos; al activarlo, `properties.subjects` produce cero, uno o varios detalles conservando la primera posición de duplicados exactos. El normalizador calcula fecha local desde el snapshot IANA, conserva operación y contexto declarado, crea `unknown` para web y `active` para `subject_associated` server. Formas inválidas, tipos no soportados y timezone ausente se guardan con `normalization_status/reason` sin impedir el evento crudo. El repositorio persiste evento, identidad y detalles en una transacción por evento; `ON CONFLICT` converge identidades concurrentes y transforma la segunda contribución funcional entre sites en `idempotency_conflict`. La integración PostgreSQL real verificó tres eventos crudos preservados, una sola identidad promovida a active, una asociación normalizada, un conflicto funcional y un fallo semántico; otra prueba concurrente produjo una identidad y dos detalles. `make test` y `go vet ./...` aprobaron.
 
 ### TASK-CA-0105 — Implementar Lifecycle Monotónico Y Merge
 

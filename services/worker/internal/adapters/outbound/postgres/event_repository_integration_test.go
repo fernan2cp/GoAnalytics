@@ -11,6 +11,7 @@ import (
 
 	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/domain/event"
+	"goanalytics/services/worker/internal/domain/subject"
 )
 
 func TestEventRepositoryIntegrationClassifiesConflictsPerEvent(t *testing.T) {
@@ -106,6 +107,89 @@ func TestEventRepositoryIntegrationPersistsEventSource(t *testing.T) {
 	}
 }
 
+func TestEventRepositoryIntegrationNormalizesSubjectsTenantFirst(t *testing.T) {
+	repository, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+
+	web := integrationValidatedEvent("subject-web")
+	web.EventName = "subject_selected"
+	web.Timezone = "America/Argentina/Buenos_Aires"
+	web.SubjectDetails = []subject.EventDetail{
+		integrationSubjectDetail("customer-1", subject.LifecycleUnknown),
+		{SubjectOrdinal: 1, SubjectType: "account", ExternalSubjectID: "account-1", ContextResolutionStatus: subject.ContextRegistryDisabled, NormalizationStatus: subject.NormalizationUnsupportedType, NormalizationReason: "unsupported_subject_type", InitialLifecycleStatus: subject.LifecycleUnknown},
+	}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{web}), outbound.EventPersistenceInserted)
+
+	associated := integrationValidatedEvent("subject-associated")
+	associated.SiteID = "site-id-2"
+	associated.SiteCode = "site-2"
+	associated.EventSource = "server"
+	associated.EventName = "subject_associated"
+	associated.IdempotencyKey = "operation-1"
+	associated.SubjectDetails = []subject.EventDetail{integrationSubjectDetail("customer-1", subject.LifecycleActive)}
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{associated}), outbound.EventPersistenceInserted)
+
+	duplicate := associated
+	duplicate.EventID = "subject-associated-retry"
+	duplicate.SiteID = "site-id-3"
+	duplicate.SiteCode = "site-3"
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{duplicate}), outbound.EventPersistenceInserted)
+
+	var subjectsCount, rawCount, normalizedAssociations, conflicts, unsupported int
+	var lifecycleStatus string
+	if err := pool.QueryRow(ctx, "SELECT count(*), max(lifecycle_status) FROM analytics_subjects WHERE tenant_id='tenant-1' AND external_subject_id='customer-1'").Scan(&subjectsCount, &lifecycleStatus); err != nil {
+		t.Fatalf("consultar identidad: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_events").Scan(&rawCount); err != nil {
+		t.Fatalf("consultar eventos crudos: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_event_subjects WHERE event_name='subject_associated' AND normalization_status='normalized'").Scan(&normalizedAssociations); err != nil {
+		t.Fatalf("consultar asociaciones: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_event_subjects WHERE normalization_status='idempotency_conflict'").Scan(&conflicts); err != nil {
+		t.Fatalf("consultar conflictos: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_event_subjects WHERE normalization_status='unsupported_subject_type'").Scan(&unsupported); err != nil {
+		t.Fatalf("consultar fallos semánticos: %v", err)
+	}
+	if subjectsCount != 1 || lifecycleStatus != "active" || rawCount != 3 || normalizedAssociations != 1 || conflicts != 1 || unsupported != 1 {
+		t.Fatalf("subjects=%d status=%s raw=%d normalized=%d conflicts=%d unsupported=%d", subjectsCount, lifecycleStatus, rawCount, normalizedAssociations, conflicts, unsupported)
+	}
+}
+
+func TestEventRepositoryIntegrationConvergesConcurrentSubjectCreation(t *testing.T) {
+	repository, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+	first := integrationValidatedEvent("subject-concurrent-1")
+	first.SubjectDetails = []subject.EventDetail{integrationSubjectDetail("customer-concurrent", subject.LifecycleUnknown)}
+	second := integrationValidatedEvent("subject-concurrent-2")
+	second.SiteID = "site-id-2"
+	second.SiteCode = "site-2"
+	second.SubjectDetails = []subject.EventDetail{integrationSubjectDetail("customer-concurrent", subject.LifecycleUnknown)}
+
+	resultsChannel := make(chan outbound.EventPersistenceResult, 2)
+	for _, item := range []event.ValidatedEvent{first, second} {
+		item := item
+		go func() { resultsChannel <- repository.SaveBatch(ctx, []event.ValidatedEvent{item})[0] }()
+	}
+	for range 2 {
+		result := <-resultsChannel
+		if result.Err != nil || result.Status != outbound.EventPersistenceInserted {
+			t.Fatalf("resultado concurrente = %#v", result)
+		}
+	}
+	var subjectsCount, detailsCount int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_subjects WHERE external_subject_id='customer-concurrent'").Scan(&subjectsCount); err != nil {
+		t.Fatalf("consultar sujetos: %v", err)
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM analytics_event_subjects WHERE external_subject_id='customer-concurrent'").Scan(&detailsCount); err != nil {
+		t.Fatalf("consultar detalles: %v", err)
+	}
+	if subjectsCount != 1 || detailsCount != 2 {
+		t.Fatalf("sujetos=%d detalles=%d", subjectsCount, detailsCount)
+	}
+}
+
 func newIntegrationEventRepository(t *testing.T) (*EventRepository, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_INTEGRATION_DSN")
@@ -153,6 +237,22 @@ func integrationValidatedEvent(eventID string) event.ValidatedEvent {
 		AnonymousID: "anonymous-1", SessionID: "session-1", Origin: "https://example.com",
 		URL: "https://example.com/products", Path: "/products",
 		Properties: map[string]any{"surface": "catalog"}, Context: map[string]any{"locale": "es-AR"},
+	}
+}
+
+func integrationSubjectDetail(externalID string, status subject.LifecycleStatus) subject.EventDetail {
+	localDate := time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC)
+	return subject.EventDetail{
+		SubjectOrdinal:          0,
+		SubjectType:             "customer",
+		ExternalSubjectID:       externalID,
+		Relation:                "selected",
+		ContextResolutionStatus: subject.ContextRegistryDisabled,
+		TimezoneName:            "America/Argentina/Buenos_Aires",
+		LocalDate:               &localDate,
+		NormalizationStatus:     subject.NormalizationNormalized,
+		Metadata:                map[string]any{},
+		InitialLifecycleStatus:  status,
 	}
 }
 
@@ -205,4 +305,57 @@ CREATE UNIQUE INDEX ux_events_idempotency ON analytics_events(tenant_id, site_id
     WHERE idempotency_key IS NOT NULL AND idempotency_key <> '';
 CREATE TABLE analytics_event_items (analytics_event_id BIGINT NOT NULL);
 CREATE TABLE analytics_event_orders (analytics_event_id BIGINT NOT NULL);
+CREATE TABLE analytics_subjects (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    subject_type TEXT NOT NULL CHECK (subject_type = 'customer'),
+    external_subject_id TEXT NOT NULL,
+    lifecycle_status TEXT NOT NULL CHECK (lifecycle_status IN ('unknown','active','inactive','merged')),
+    lifecycle_source_updated_at TIMESTAMPTZ,
+    lifecycle_source_mutation_id TEXT,
+    lifecycle_effective_at TIMESTAMPTZ,
+    merged_into_subject_id BIGINT REFERENCES analytics_subjects(id),
+    status_updated_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, subject_type, external_subject_id)
+);
+CREATE TABLE analytics_event_subjects (
+    id BIGSERIAL PRIMARY KEY,
+    analytics_event_id BIGINT NOT NULL REFERENCES analytics_events(id) ON DELETE CASCADE,
+    subject_ordinal INTEGER NOT NULL,
+    client_event_id TEXT NOT NULL,
+    logical_event_id TEXT,
+    idempotency_key TEXT,
+    tenant_id TEXT NOT NULL,
+    site_id TEXT NOT NULL,
+    event_source TEXT NOT NULL,
+    event_name TEXT NOT NULL,
+    event_time TIMESTAMPTZ NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL,
+    analytics_subject_id BIGINT REFERENCES analytics_subjects(id),
+    subject_type TEXT NOT NULL,
+    external_subject_id TEXT NOT NULL,
+    relation TEXT NOT NULL DEFAULT '',
+    operation_type TEXT,
+    operation_id TEXT,
+    context_definition_id BIGINT,
+    context_key TEXT,
+    context_version INTEGER,
+    claimed_context_family TEXT,
+    resolved_context_family TEXT,
+    context_resolution_status TEXT NOT NULL,
+    context_registry_revision_id BIGINT,
+    timezone_name TEXT,
+    local_date DATE,
+    normalization_status TEXT NOT NULL,
+    normalization_reason TEXT,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (analytics_event_id, subject_ordinal)
+);
+CREATE UNIQUE INDEX ux_event_subjects_tenant_idempotency
+ON analytics_event_subjects(tenant_id,event_name,idempotency_key,subject_type,external_subject_id,relation)
+WHERE idempotency_key IS NOT NULL AND idempotency_key <> '';
 `

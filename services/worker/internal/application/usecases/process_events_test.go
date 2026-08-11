@@ -731,6 +731,42 @@ func TestProcessDoesNotRelaxWebValidation(t *testing.T) {
 	}
 }
 
+func TestProcessSubjectNormalizationIsOptIn(t *testing.T) {
+	t.Parallel()
+
+	raw := validRawEvent()
+	raw.EventName = "subject_selected"
+	raw.Properties = map[string]any{"subjects": []any{map[string]any{
+		"subject_type": "customer", "subject_id": "customer-1", "relation": "selected",
+	}}}
+	config := cachedSite()
+	config.Timezone = "America/Argentina/Buenos_Aires"
+
+	disabledRepository := &fakeEventRepository{}
+	disabled := newTestProcessUseCase(time.Now(), disabledRepository, &fakeRejectedRepository{}, config, nil, &fakeDeduplicator{})
+	if err := disabled.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process(disabled) error = %v", err)
+	}
+	if len(disabledRepository.events) != 1 || disabledRepository.events[0].SubjectDetails != nil {
+		t.Fatalf("normalización apagada = %#v", disabledRepository.events)
+	}
+
+	enabledRepository := &fakeEventRepository{}
+	enabled := NewProcessEventsUseCaseWithFeatures(
+		nil, enabledRepository, &fakeRejectedRepository{},
+		&fakeSiteCache{config: config, found: true}, &fakeSiteResolver{config: config},
+		&fakeDeduplicator{}, fakeClock{now: time.Now()}, nil,
+		RehydrateSiteOptions{}, nil, nil,
+		ProcessFeatures{SubjectNormalizationEnabled: true},
+	)
+	if err := enabled.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process(enabled) error = %v", err)
+	}
+	if len(enabledRepository.events) != 1 || len(enabledRepository.events[0].SubjectDetails) != 1 {
+		t.Fatalf("normalización encendida = %#v", enabledRepository.events)
+	}
+}
+
 type processMetricsFake struct {
 	counters map[string]int
 }

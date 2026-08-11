@@ -34,17 +34,24 @@ var (
 // Debe construirse con NewProcessEventsUseCase. Sus metodos devuelven error
 // cuando una dependencia o validacion impide completar el batch.
 type ProcessEventsUseCase struct {
-	consumer           outbound.EventConsumer
-	eventRepository    outbound.EventRepository
-	rejectedRepository outbound.RejectedEventRepository
-	siteCache          outbound.SiteCache
-	siteResolver       outbound.SiteResolver
-	deduplicator       outbound.Deduplicator
-	clock              outbound.Clock
-	logger             outbound.Logger
-	validateSite       *ValidateSiteUseCase
-	semanticRules      []SemanticDedupRule
-	metrics            outbound.Metrics
+	consumer                    outbound.EventConsumer
+	eventRepository             outbound.EventRepository
+	rejectedRepository          outbound.RejectedEventRepository
+	siteCache                   outbound.SiteCache
+	siteResolver                outbound.SiteResolver
+	deduplicator                outbound.Deduplicator
+	clock                       outbound.Clock
+	logger                      outbound.Logger
+	validateSite                *ValidateSiteUseCase
+	semanticRules               []SemanticDedupRule
+	metrics                     outbound.Metrics
+	subjectNormalizationEnabled bool
+}
+
+// ProcessFeatures controla capacidades opt-in del procesamiento crítico.
+type ProcessFeatures struct {
+	// SubjectNormalizationEnabled habilita detalles 1:N de sujetos.
+	SubjectNormalizationEnabled bool
 }
 
 // NewProcessEventsUseCase crea el caso de uso de procesamiento de eventos.
@@ -122,19 +129,45 @@ func NewProcessEventsUseCaseWithMetrics(
 	semanticRules []SemanticDedupRule,
 	metrics outbound.Metrics,
 ) *ProcessEventsUseCase {
+	return NewProcessEventsUseCaseWithFeatures(
+		consumer, eventRepository, rejectedRepository, siteCache, siteResolver,
+		deduplicator, clock, logger, rehydrateOptions, semanticRules, metrics,
+		ProcessFeatures{},
+	)
+}
+
+// NewProcessEventsUseCaseWithFeatures crea el caso de uso con flags explícitos.
+//
+// Recibe los puertos, opciones existentes, métricas y capacidades opt-in. Las
+// capacidades apagadas no agregan escrituras ni cambian contratos legacy.
+func NewProcessEventsUseCaseWithFeatures(
+	consumer outbound.EventConsumer,
+	eventRepository outbound.EventRepository,
+	rejectedRepository outbound.RejectedEventRepository,
+	siteCache outbound.SiteCache,
+	siteResolver outbound.SiteResolver,
+	deduplicator outbound.Deduplicator,
+	clock outbound.Clock,
+	logger outbound.Logger,
+	rehydrateOptions RehydrateSiteOptions,
+	semanticRules []SemanticDedupRule,
+	metrics outbound.Metrics,
+	features ProcessFeatures,
+) *ProcessEventsUseCase {
 	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, rehydrateOptions)
 	return &ProcessEventsUseCase{
-		consumer:           consumer,
-		eventRepository:    eventRepository,
-		rejectedRepository: rejectedRepository,
-		siteCache:          siteCache,
-		siteResolver:       siteResolver,
-		deduplicator:       deduplicator,
-		clock:              clock,
-		logger:             logger,
-		validateSite:       NewValidateSiteUseCase(siteCache, rehydrateSite),
-		semanticRules:      semanticRules,
-		metrics:            metrics,
+		consumer:                    consumer,
+		eventRepository:             eventRepository,
+		rejectedRepository:          rejectedRepository,
+		siteCache:                   siteCache,
+		siteResolver:                siteResolver,
+		deduplicator:                deduplicator,
+		clock:                       clock,
+		logger:                      logger,
+		validateSite:                NewValidateSiteUseCase(siteCache, rehydrateSite),
+		semanticRules:               semanticRules,
+		metrics:                     metrics,
+		subjectNormalizationEnabled: features.SubjectNormalizationEnabled,
 	}
 }
 
@@ -197,6 +230,9 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			continue
 		}
 		validEvent := buildValidatedEvent(raw, config, dedupStrategy)
+		if uc.subjectNormalizationEnabled {
+			validEvent.SubjectDetails = normalizeSubjectDetails(validEvent)
+		}
 		validEvent.ItemDetails = buildItemDetails(validEvent)
 		validEvent.OrderDetail = buildOrderDetail(validEvent)
 		itemDedupStrategy, itemDuplicateReason, err := uc.evaluateItemSpecificDedup(ctx, validEvent)
