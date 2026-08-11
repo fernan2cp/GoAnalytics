@@ -19,6 +19,7 @@ type ValidatedEvent struct {
 	Sequence               int64
 	PreviousLogicalEventID string
 	DedupStrategy          string
+	EventSource            string
 	TenantID               string
 	SiteID                 string
 	SiteCode               string
@@ -40,6 +41,7 @@ type ValidatedEvent struct {
 	SDKVersion             string
 	JWTID                  string
 	TokenVersion           int
+	Timezone               string
 	Properties             map[string]any
 	Context                map[string]any
 	ItemDetails            []ItemDetail

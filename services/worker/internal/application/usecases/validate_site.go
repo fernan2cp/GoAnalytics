@@ -57,7 +57,11 @@ func (uc *ValidateSiteUseCase) Validate(ctx context.Context, raw dto.RawEvent) (
 	if uc == nil || uc.siteCache == nil || uc.rehydrateSite == nil {
 		return site.SiteConfig{}, ErrValidateSiteDependencyMissing
 	}
-	if strings.TrimSpace(raw.SiteCode) == "" || strings.TrimSpace(raw.Origin) == "" || strings.TrimSpace(raw.Environment) == "" {
+	source, validSource := site.NormalizeSource(raw.EventSource)
+	if strings.TrimSpace(raw.SiteCode) == "" || strings.TrimSpace(raw.Environment) == "" || !validSource {
+		return site.SiteConfig{}, ErrValidateSiteInputInvalid
+	}
+	if source == site.SourceWeb && strings.TrimSpace(raw.Origin) == "" {
 		return site.SiteConfig{}, ErrValidateSiteInputInvalid
 	}
 
@@ -66,6 +70,7 @@ func (uc *ValidateSiteUseCase) Validate(ctx context.Context, raw dto.RawEvent) (
 		Origin:       raw.Origin,
 		Environment:  raw.Environment,
 		TokenVersion: raw.TokenVersion,
+		Source:       source,
 	}
 	config, found, err := uc.siteCache.Get(ctx, cacheKey)
 	if err != nil {
@@ -77,7 +82,7 @@ func (uc *ValidateSiteUseCase) Validate(ctx context.Context, raw dto.RawEvent) (
 			return site.SiteConfig{}, fmt.Errorf("%w: %v", ErrSiteNotAvailable, err)
 		}
 	}
-	if err := site.ValidateForEvent(config, raw.SiteCode, raw.Environment, raw.TokenVersion, raw.Origin); err != nil {
+	if err := site.ValidateForEventSource(config, raw.SiteCode, raw.Environment, raw.TokenVersion, raw.Origin, source); err != nil {
 		return site.SiteConfig{}, err
 	}
 	return config, nil

@@ -675,6 +675,62 @@ func TestProcessPublishesPersistenceOutcomeMetric(t *testing.T) {
 	}
 }
 
+func TestProcessPropagatesServerSourceSiteAndTimezone(t *testing.T) {
+	now := time.Now()
+	eventRepository := &fakeEventRepository{}
+	rejectedRepository := &fakeRejectedRepository{}
+	config := cachedSite()
+	config.Timezone = "America/Argentina/Buenos_Aires"
+	cache := &fakeSiteCache{config: config, found: true}
+	useCase := newProcessUseCaseWithPorts(
+		now, eventRepository, rejectedRepository, cache,
+		&fakeSiteResolver{config: config}, &fakeDeduplicator{},
+	)
+	raw := validRawEvent()
+	raw.EventSource = site.SourceServer
+	raw.TokenVersion = 0
+	raw.JWTID = ""
+	raw.AnonymousID = ""
+	raw.SessionID = ""
+	raw.Origin = ""
+	raw.URL = ""
+	raw.Path = ""
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(rejectedRepository.events) != 0 || len(eventRepository.events) != 1 {
+		t.Fatalf("persistidos=%d rechazados=%d", len(eventRepository.events), len(rejectedRepository.events))
+	}
+	got := eventRepository.events[0]
+	if got.EventSource != site.SourceServer || got.TenantID != config.TenantID || got.SiteID != config.SiteID || got.Timezone != config.Timezone {
+		t.Fatalf("trazabilidad propagada = %#v", got)
+	}
+	metadata, ok := got.Context["_goanalytics"].(map[string]any)
+	if !ok || metadata["event_source"] != site.SourceServer || metadata["timezone"] != config.Timezone {
+		t.Fatalf("snapshot interno = %#v", got.Context["_goanalytics"])
+	}
+	if len(cache.keys) != 1 || cache.keys[0].Source != site.SourceServer || cache.keys[0].Origin != "" {
+		t.Fatalf("clave de resolución = %#v", cache.keys)
+	}
+}
+
+func TestProcessDoesNotRelaxWebValidation(t *testing.T) {
+	eventRepository := &fakeEventRepository{}
+	rejectedRepository := &fakeRejectedRepository{}
+	useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.EventSource = site.SourceWeb
+	raw.Origin = ""
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 || len(rejectedRepository.events) != 1 || rejectedRepository.events[0].Reason != rejection.ReasonInvalidPayload {
+		t.Fatalf("persistidos=%d rechazos=%#v", len(eventRepository.events), rejectedRepository.events)
+	}
+}
+
 type processMetricsFake struct {
 	counters map[string]int
 }
@@ -692,6 +748,7 @@ func validRawEvent() dto.RawEvent {
 	receivedAt := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	return dto.RawEvent{
 		EventID:      "evt_1",
+		EventSource:  site.SourceWeb,
 		SiteCode:     "pub_site_abc123",
 		Environment:  "production",
 		TokenVersion: 1,

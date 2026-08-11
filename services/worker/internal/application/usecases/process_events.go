@@ -338,7 +338,8 @@ func (uc *ProcessEventsUseCase) ensureDependencies() error {
 // Recibe dto.RawEvent y devuelve error de dominio si falta algun campo
 // requerido para procesamiento. No consulta cache, resolver ni repositorios.
 func validateRawEvent(raw dto.RawEvent) error {
-	return event.ValidateRequiredFields(
+	return event.ValidateRequiredFieldsForSource(
+		raw.EventSource,
 		raw.EventID,
 		raw.SiteCode,
 		raw.Environment,
@@ -360,6 +361,7 @@ func validateRawEvent(raw dto.RawEvent) error {
 // Recibe dto.RawEvent y site.SiteConfig ya validados. Devuelve
 // event.ValidatedEvent listo para persistir mediante EventRepository.
 func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy string) event.ValidatedEvent {
+	source, _ := site.NormalizeSource(raw.EventSource)
 	return event.ValidatedEvent{
 		EventID:                raw.EventID,
 		LogicalEventID:         raw.LogicalEventID,
@@ -368,6 +370,7 @@ func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy
 		Sequence:               raw.Sequence,
 		PreviousLogicalEventID: raw.PreviousLogicalEventID,
 		DedupStrategy:          dedupStrategy,
+		EventSource:            source,
 		TenantID:               config.TenantID,
 		SiteID:                 config.SiteID,
 		SiteCode:               raw.SiteCode,
@@ -389,9 +392,28 @@ func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy
 		SDKVersion:             raw.SDKVersion,
 		JWTID:                  raw.JWTID,
 		TokenVersion:           raw.TokenVersion,
+		Timezone:               config.Timezone,
 		Properties:             event.NormalizeMap(raw.Properties),
-		Context:                event.NormalizeMap(raw.Context),
+		Context:                buildValidatedContext(raw.Context, source, config.Timezone),
 	}
+}
+
+// buildValidatedContext agrega snapshots internos sin mutar el payload crudo.
+//
+// Conserva las claves del contexto recibido y reemplaza la clave reservada
+// `_goanalytics` con source y timezone resueltos. Esto permite reconstruir la
+// decisión aplicada aun antes de que exista un detalle normalizado de sujeto.
+func buildValidatedContext(rawContext map[string]any, source string, timezone string) map[string]any {
+	contextSnapshot := make(map[string]any, len(rawContext)+1)
+	for key, value := range rawContext {
+		contextSnapshot[key] = value
+	}
+	contextSnapshot["_goanalytics"] = map[string]any{
+		"event_source":              source,
+		"timezone":                  timezone,
+		"context_registry_revision": "",
+	}
+	return contextSnapshot
 }
 
 // buildRejectedEvent arma un rechazo auditable para un evento crudo.
@@ -417,6 +439,7 @@ func (uc *ProcessEventsUseCase) buildRejectedEvent(raw dto.RawEvent, reason stri
 			"sequence":                  raw.Sequence,
 			"previous_logical_event_id": raw.PreviousLogicalEventID,
 			"event_name":                raw.EventName,
+			"event_source":              raw.EventSource,
 			"event_version":             raw.EventVersion,
 			"path":                      raw.Path,
 			"dedup_strategy":            dedupStrategy,

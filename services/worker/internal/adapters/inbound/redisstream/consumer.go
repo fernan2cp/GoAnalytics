@@ -318,8 +318,10 @@ func (consumer *Consumer) processMessage(ctx context.Context, message goredis.XM
 	}
 	if err := consumer.process.Process(ctx, []dto.RawEvent{event}); err != nil {
 		consumer.logError(ctx, "fallo procesamiento de mensaje", map[string]any{
-			"stream_id": message.ID,
-			"error":     err.Error(),
+			"stream_id":    message.ID,
+			"event_id":     event.EventID,
+			"event_source": event.EventSource,
+			"error":        err.Error(),
 		})
 		return
 	}
@@ -330,7 +332,11 @@ func (consumer *Consumer) processMessage(ctx context.Context, message goredis.XM
 		})
 		return
 	}
-	consumer.logInfo(ctx, "mensaje procesado", map[string]any{"stream_id": message.ID})
+	consumer.logInfo(ctx, "mensaje procesado", map[string]any{
+		"stream_id":    message.ID,
+		"event_id":     event.EventID,
+		"event_source": event.EventSource,
+	})
 }
 
 // rejectAndAck persiste un rechazo de transporte antes de confirmar Redis.
@@ -498,6 +504,7 @@ func decodeRawEvent(payload string) (dto.RawEvent, error) {
 		TabID:                  raw.TabID,
 		Sequence:               raw.Sequence,
 		PreviousLogicalEventID: raw.PreviousLogicalEventID,
+		EventSource:            normalizeEventSource(raw.EventSource),
 		SiteCode:               raw.SiteCode,
 		Environment:            raw.Environment,
 		TokenVersion:           raw.TokenVersion,
@@ -529,6 +536,17 @@ func normalizeEventVersion(version int) int {
 	return version
 }
 
+// normalizeEventSource preserva compatibilidad con mensajes previos al campo.
+//
+// Una fuente vacía se interpreta como web; otros valores se conservan para
+// que domain produzca un rechazo estable en vez de ocultar el dato inválido.
+func normalizeEventSource(source string) string {
+	if strings.TrimSpace(source) == "" {
+		return "web"
+	}
+	return strings.ToLower(strings.TrimSpace(source))
+}
+
 type streamRawEvent struct {
 	EventID                string         `json:"event_id"`
 	LogicalEventID         string         `json:"logical_event_id"`
@@ -536,6 +554,7 @@ type streamRawEvent struct {
 	TabID                  string         `json:"tab_id"`
 	Sequence               int64          `json:"sequence"`
 	PreviousLogicalEventID string         `json:"previous_logical_event_id"`
+	EventSource            string         `json:"event_source"`
 	SiteCode               string         `json:"site_code"`
 	Environment            string         `json:"env"`
 	TokenVersion           int            `json:"token_version"`

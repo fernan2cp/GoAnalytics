@@ -87,6 +87,25 @@ func TestEventRepositoryIntegrationConcurrentLogicalConflict(t *testing.T) {
 	}
 }
 
+func TestEventRepositoryIntegrationPersistsEventSource(t *testing.T) {
+	repository, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+	serverEvent := integrationValidatedEvent("server-event")
+	serverEvent.EventSource = "server"
+	serverEvent.Origin = ""
+	serverEvent.URL = ""
+	serverEvent.Path = ""
+
+	assertPersistenceStatus(t, repository.SaveBatch(ctx, []event.ValidatedEvent{serverEvent}), outbound.EventPersistenceInserted)
+	var source string
+	if err := pool.QueryRow(ctx, "SELECT event_source FROM analytics_events WHERE event_id=$1", serverEvent.EventID).Scan(&source); err != nil {
+		t.Fatalf("consultar event_source: %v", err)
+	}
+	if source != "server" {
+		t.Fatalf("event_source = %q, esperado server", source)
+	}
+}
+
 func newIntegrationEventRepository(t *testing.T) (*EventRepository, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_INTEGRATION_DSN")
@@ -157,7 +176,8 @@ CREATE TABLE analytics_events (
     tenant_id TEXT NOT NULL,
     site_id TEXT NOT NULL,
     site_code TEXT NOT NULL,
-    env TEXT NOT NULL,
+	    env TEXT NOT NULL,
+	    event_source TEXT NOT NULL DEFAULT 'web',
     event_name TEXT NOT NULL,
     event_version INTEGER NOT NULL,
     event_time TIMESTAMPTZ NOT NULL,

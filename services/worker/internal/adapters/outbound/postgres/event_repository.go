@@ -132,6 +132,7 @@ func saveValidatedEvent(ctx context.Context, tx pgx.Tx, item event.ValidatedEven
 		item.TokenVersion,
 		string(properties),
 		string(contextPayload),
+		normalizeEventSource(item.EventSource),
 	).Scan(&eventRowID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, false, nil
@@ -186,6 +187,7 @@ type storedEvent struct {
 	SiteID                 string
 	SiteCode               string
 	Environment            string
+	EventSource            string
 	EventName              string
 	EventVersion           int
 	EventTime              time.Time
@@ -246,6 +248,7 @@ func loadConflictingEvent(ctx context.Context, tx pgx.Tx, item event.ValidatedEv
 		&path,
 		&propertiesJSON,
 		&contextJSON,
+		&existing.EventSource,
 		&conflictField,
 	)
 	if err != nil {
@@ -282,6 +285,7 @@ type persistenceFingerprint struct {
 	SiteID                 string         `json:"site_id"`
 	SiteCode               string         `json:"site_code"`
 	Environment            string         `json:"env"`
+	EventSource            string         `json:"event_source"`
 	EventName              string         `json:"event_name"`
 	EventVersion           int            `json:"event_version"`
 	EventTime              time.Time      `json:"event_time"`
@@ -304,7 +308,7 @@ func persistenceFingerprintFromEvent(item event.ValidatedEvent) (string, error) 
 		LogicalEventID: item.LogicalEventID, IdempotencyKey: item.IdempotencyKey,
 		TabID: item.TabID, Sequence: item.Sequence, PreviousLogicalEventID: item.PreviousLogicalEventID,
 		TenantID: item.TenantID, SiteID: item.SiteID, SiteCode: item.SiteCode,
-		Environment: item.Environment, EventName: item.EventName, EventVersion: item.EventVersion,
+		Environment: item.Environment, EventSource: normalizeEventSource(item.EventSource), EventName: item.EventName, EventVersion: item.EventVersion,
 		EventTime: normalizePostgresTime(item.EventTime), AnonymousID: item.AnonymousID,
 		UserID: item.UserID, SessionID: item.SessionID, Origin: item.Origin, URL: item.URL, Path: item.Path,
 		Properties: nonNilMap(item.Properties), Context: nonNilMap(item.Context),
@@ -319,7 +323,7 @@ func persistenceFingerprintFromStored(item storedEvent) (string, error) {
 		LogicalEventID: item.LogicalEventID, IdempotencyKey: item.IdempotencyKey,
 		TabID: item.TabID, Sequence: item.Sequence, PreviousLogicalEventID: item.PreviousLogicalEventID,
 		TenantID: item.TenantID, SiteID: item.SiteID, SiteCode: item.SiteCode,
-		Environment: item.Environment, EventName: item.EventName, EventVersion: item.EventVersion,
+		Environment: item.Environment, EventSource: item.EventSource, EventName: item.EventName, EventVersion: item.EventVersion,
 		EventTime: normalizePostgresTime(item.EventTime), AnonymousID: item.AnonymousID,
 		UserID: item.UserID, SessionID: item.SessionID, Origin: item.Origin, URL: item.URL, Path: item.Path,
 		Properties: nonNilMap(item.Properties), Context: nonNilMap(item.Context),
@@ -453,13 +457,15 @@ INSERT INTO analytics_events (
 	previous_logical_event_id, dedup_strategy, tenant_id, site_id, site_code,
 	env, event_name, event_version, event_time, received_at, anonymous_id,
 	user_id, session_id, origin, url, path, referrer, user_agent, ip_hash,
-	sdk_name, sdk_version, jwt_id, token_version, properties, context
+	sdk_name, sdk_version, jwt_id, token_version, properties, context,
+	event_source
 ) VALUES (
 	$1, $2, $3, $4, $5,
 	$6, $7, $8, $9, $10,
 	$11, $12, $13, $14, $15, $16,
 	$17, $18, $19, $20, $21, $22, $23, $24,
-	$25, $26, $27, $28, $29::jsonb, $30::jsonb
+	$25, $26, $27, $28, $29::jsonb, $30::jsonb,
+	$31
 )
 ON CONFLICT DO NOTHING
 RETURNING id`
@@ -469,7 +475,7 @@ SELECT
 	event_id, logical_event_id, idempotency_key, tab_id, sequence,
 	previous_logical_event_id, tenant_id, site_id, site_code,
 	env, event_name, event_version, event_time, anonymous_id, user_id,
-	session_id, origin, url, path, properties, context,
+	session_id, origin, url, path, properties, context, event_source,
 	CASE
 		WHEN event_id = $1 THEN 'event_id'
 		WHEN $4::text IS NOT NULL AND tenant_id = $2 AND site_id = $3 AND logical_event_id = $4 THEN 'logical_event_id'
@@ -540,6 +546,14 @@ func nonNilMap(value map[string]any) map[string]any {
 func emptyToNil(value string) any {
 	if value == "" {
 		return nil
+	}
+	return value
+}
+
+// normalizeEventSource conserva compatibilidad con eventos validados legacy.
+func normalizeEventSource(value string) string {
+	if value == "" {
+		return "web"
 	}
 	return value
 }

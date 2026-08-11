@@ -17,6 +17,7 @@ type RawEvent struct {
 	TabID                  string
 	Sequence               int64
 	PreviousLogicalEventID string
+	EventSource            string
 	SiteCode               string
 	Environment            string
 	TokenVersion           int

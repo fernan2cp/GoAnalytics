@@ -32,6 +32,25 @@ func TestProcessMessagesIsolatesInvalidPayload(t *testing.T) {
 	assertAckedIDs(t, client.acked, "1-0", "2-0")
 }
 
+func TestDecodeRawEventPropagatesSourceAndDefaultsLegacyToWeb(t *testing.T) {
+	t.Parallel()
+
+	server, err := decodeRawEvent(`{"event_id":"server-1","event_source":"server"}`)
+	if err != nil {
+		t.Fatalf("decodeRawEvent(server) error = %v", err)
+	}
+	if server.EventSource != "server" {
+		t.Fatalf("EventSource = %q, esperado server", server.EventSource)
+	}
+	legacy, err := decodeRawEvent(`{"event_id":"web-legacy"}`)
+	if err != nil {
+		t.Fatalf("decodeRawEvent(legacy) error = %v", err)
+	}
+	if legacy.EventSource != "web" {
+		t.Fatalf("EventSource legacy = %q, esperado web", legacy.EventSource)
+	}
+}
+
 func TestProcessMessagesKeepsRejectedPendingWhenPersistenceFails(t *testing.T) {
 	client := newFakeStreamClient()
 	processor := &fakeEventProcessor{rejectionErr: errors.New("postgres no disponible")}

@@ -51,6 +51,7 @@ func (publisher *EventStreamPublisher) Publish(ctx context.Context, events []eve
 			Values: map[string]any{
 				"schema_version": 1,
 				"event_id":       raw.EventID,
+				"event_source":   raw.EventSource,
 				"site_code":      raw.SiteCode,
 				"event_name":     raw.EventName,
 				"payload":        string(payload),

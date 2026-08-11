@@ -120,7 +120,7 @@
 
 ### TASK-CA-0103 — Propagar Origen, Zona Horaria Y Trazabilidad
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-012`, `REQ-CA-014`, `REQ-CA-015`, `REQ-CA-016`.
 - **Criterios:** `AC-CA-005`, `AC-CA-006`, `AC-CA-007`.
@@ -130,7 +130,7 @@
   2. Guardar timezone y revisión aplicadas como snapshot reproducible.
   3. Evitar que datos server relajen la validación de tráfico web.
   4. Agregar trazas correlacionables sin registrar tokens ni identificadores personales innecesarios.
-- **Evidencia:** pendiente: pruebas end-to-end web/server y consultas de trazabilidad.
+- **Evidencia:** ingest publica `event_source` tanto en el envelope como en el JSON del stream; el consumer interpreta mensajes legacy sin source como `web` y conserva `server`. La validación del worker mantiene token, identidad de sesión, origin, URL y path obligatorios para web, mientras server usa una clave de caché aislada y no exige navegación. Tras resolver el site, el evento validado transporta tenant, site, source y timezone; el contexto persistido guarda el snapshot reservado `_goanalytics` con source, timezone y revisión de registro aplicada —vacía mientras el registro está deshabilitado—. PostgreSQL persiste y usa `event_source` en la huella de idempotencia. Integraciones reales aprobaron envelope/payload Redis y consulta de `analytics_events.event_source`; pruebas de aplicación aprobaron server sin navegación y rechazo web sin origin. `make test` y `go vet ./...` aprobaron ingest y worker.
 
 ### TASK-CA-0104 — Implementar Normalización 1:N Tenant-First
 
