@@ -76,6 +76,17 @@ type Config struct {
 	SubjectJobsCheckInterval      time.Duration
 	SubjectJobsHealthHTTPHost     string
 	SubjectJobsHealthHTTPPort     int
+	SubjectQueryAPIToken          string
+	SubjectQueryHTTPHost          string
+	SubjectQueryHTTPPort          int
+	SubjectQueryReadTimeout       time.Duration
+	SubjectQueryWriteTimeout      time.Duration
+	SubjectSuggestionDefaultLimit int
+	SubjectSuggestionMaxLimit     int
+	SubjectSuggestionContextDays  int
+	SubjectSuggestionGlobalDays   int
+	SubjectSuggestionStaleAfter   time.Duration
+	SubjectSuggestionServeStale   bool
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -119,20 +130,30 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		SiteResolverToken:   getEnv("SITE_RESOLVER_TOKEN", ""),
 		SiteResolverTimeout: 300 * time.Millisecond,
 
-		SiteRehydrateCooldown:       300 * time.Second,
-		SiteNegativeCacheTTL:        300 * time.Second,
-		SiteCacheTTL:                time.Hour,
-		DeduplicationTTL:            24 * time.Hour,
-		SubjectSnapshotURL:          getEnv("SUBJECT_SNAPSHOT_URL", ""),
-		SubjectSourceToken:          getEnv("SUBJECT_SOURCE_TOKEN", ""),
-		SubjectSnapshotTimeout:      5 * time.Second,
-		SubjectBootstrapPageSize:    500,
-		SubjectProjectionInterval:   24 * time.Hour,
-		SubjectProjectionStaleAfter: 48 * time.Hour,
-		SubjectProjectionBatchSize:  5000,
-		SubjectProjectionVersion:    1,
-		SubjectJobsCheckInterval:    time.Minute,
-		SubjectJobsHealthHTTPHost:   getEnv("SUBJECT_JOBS_HEALTH_HTTP_HOST", "0.0.0.0"),
+		SiteRehydrateCooldown:         300 * time.Second,
+		SiteNegativeCacheTTL:          300 * time.Second,
+		SiteCacheTTL:                  time.Hour,
+		DeduplicationTTL:              24 * time.Hour,
+		SubjectSnapshotURL:            getEnv("SUBJECT_SNAPSHOT_URL", ""),
+		SubjectSourceToken:            getEnv("SUBJECT_SOURCE_TOKEN", ""),
+		SubjectSnapshotTimeout:        5 * time.Second,
+		SubjectBootstrapPageSize:      500,
+		SubjectProjectionInterval:     24 * time.Hour,
+		SubjectProjectionStaleAfter:   48 * time.Hour,
+		SubjectProjectionBatchSize:    5000,
+		SubjectProjectionVersion:      1,
+		SubjectJobsCheckInterval:      time.Minute,
+		SubjectJobsHealthHTTPHost:     getEnv("SUBJECT_JOBS_HEALTH_HTTP_HOST", "0.0.0.0"),
+		SubjectQueryAPIToken:          getEnv("SUBJECT_QUERY_API_TOKEN", ""),
+		SubjectQueryHTTPHost:          getEnv("SUBJECT_QUERY_HTTP_HOST", "0.0.0.0"),
+		SubjectQueryReadTimeout:       3 * time.Second,
+		SubjectQueryWriteTimeout:      3 * time.Second,
+		SubjectSuggestionDefaultLimit: 10,
+		SubjectSuggestionMaxLimit:     100,
+		SubjectSuggestionContextDays:  30,
+		SubjectSuggestionGlobalDays:   90,
+		SubjectSuggestionStaleAfter:   48 * time.Hour,
+		SubjectSuggestionServeStale:   true,
 	}
 
 	var err error
@@ -225,6 +246,33 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.SubjectJobsHealthHTTPPort, err = getEnvInt("SUBJECT_JOBS_HEALTH_HTTP_PORT", 8080); err != nil {
 		return Config{}, err
 	}
+	if config.SubjectQueryHTTPPort, err = getEnvInt("SUBJECT_QUERY_HTTP_PORT", 8080); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectQueryReadTimeout, err = getEnvMillis("SUBJECT_QUERY_READ_TIMEOUT_MS", config.SubjectQueryReadTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectQueryWriteTimeout, err = getEnvMillis("SUBJECT_QUERY_WRITE_TIMEOUT_MS", config.SubjectQueryWriteTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionDefaultLimit, err = getEnvInt("SUBJECT_SUGGESTION_DEFAULT_LIMIT", config.SubjectSuggestionDefaultLimit); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionMaxLimit, err = getEnvInt("SUBJECT_SUGGESTION_MAX_LIMIT", config.SubjectSuggestionMaxLimit); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionContextDays, err = getEnvInt("SUBJECT_SUGGESTION_CONTEXT_WINDOW_DAYS", config.SubjectSuggestionContextDays); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionGlobalDays, err = getEnvInt("SUBJECT_SUGGESTION_GLOBAL_WINDOW_DAYS", config.SubjectSuggestionGlobalDays); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionStaleAfter, err = getEnvSeconds("SUBJECT_SUGGESTION_STALE_AFTER_SECONDS", config.SubjectSuggestionStaleAfter); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectSuggestionServeStale, err = getEnvBool("SUBJECT_SUGGESTION_SERVE_STALE", config.SubjectSuggestionServeStale); err != nil {
+		return Config{}, err
+	}
 	if err := config.validateSubjectFeatures(); err != nil {
 		return Config{}, err
 	}
@@ -259,12 +307,23 @@ func (config Config) validateSubjectFeatures() error {
 	if config.SubjectQueryAPIEnabled && !config.SubjectProjectionEnabled {
 		return fmt.Errorf("SUBJECT_QUERY_API_ENABLED requiere SUBJECT_PROJECTION_ENABLED")
 	}
+	if config.SubjectQueryAPIEnabled && strings.TrimSpace(config.SubjectQueryAPIToken) == "" {
+		return fmt.Errorf("SUBJECT_QUERY_API_ENABLED requiere SUBJECT_QUERY_API_TOKEN")
+	}
+	if config.SubjectSuggestionDefaultLimit < 1 || config.SubjectSuggestionMaxLimit > 100 || config.SubjectSuggestionDefaultLimit > config.SubjectSuggestionMaxLimit || config.SubjectSuggestionContextDays < 1 || config.SubjectSuggestionGlobalDays < 1 || config.SubjectSuggestionStaleAfter <= 0 {
+		return fmt.Errorf("configuración de sugerencias inválida")
+	}
 	return nil
 }
 
 // SubjectJobsHealthAddress devuelve host:port del proceso subject-jobs.
 func (config Config) SubjectJobsHealthAddress() string {
 	return net.JoinHostPort(config.SubjectJobsHealthHTTPHost, strconv.Itoa(config.SubjectJobsHealthHTTPPort))
+}
+
+// SubjectQueryAddress devuelve host:port del proceso query-api.
+func (config Config) SubjectQueryAddress() string {
+	return net.JoinHostPort(config.SubjectQueryHTTPHost, strconv.Itoa(config.SubjectQueryHTTPPort))
 }
 
 // HealthAddress devuelve la direccion HTTP operativa host:port del worker.

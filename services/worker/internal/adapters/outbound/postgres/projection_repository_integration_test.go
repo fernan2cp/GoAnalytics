@@ -118,6 +118,46 @@ func TestProjectionRepositoryIntegrationAdvisoryLockIsExclusive(t *testing.T) {
 	}
 }
 
+func TestSuggestionRepositoryIntegrationOrdersAndIsolatesTenants(t *testing.T) {
+	_, pool := newIntegrationEventRepository(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, projectionIntegrationSchemaSQL); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO analytics_projection_runs(projection_name,projection_version,status,started_at,completed_at) VALUES('subject_global',1,'completed',now(),now())`); err != nil {
+		t.Fatal(err)
+	}
+	type candidate struct {
+		tenant, id string
+		count      int
+		last       time.Time
+	}
+	now := time.Now().UTC()
+	candidates := []candidate{{"tenant-a", "customer-b", 5, now.Add(-time.Hour)}, {"tenant-a", "customer-a", 5, now.Add(-time.Hour)}, {"tenant-a", "customer-c", 8, now.Add(-2 * time.Hour)}, {"tenant-b", "customer-private", 99, now}}
+	for _, candidate := range candidates {
+		var id int64
+		if err := pool.QueryRow(ctx, `INSERT INTO analytics_subjects(tenant_id,subject_type,external_subject_id,lifecycle_status,status_updated_at) VALUES($1,'customer',$2,'active',now()) RETURNING id`, candidate.tenant, candidate.id).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `INSERT INTO analytics_subject_tenant_daily(tenant_id,analytics_subject_id,local_date,timezone_name,association_count,last_association_at,projection_version,computed_at) VALUES($1,$2,CURRENT_DATE,'UTC',$3,$4,1,now())`, candidate.tenant, id, candidate.count, candidate.last); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repository, _ := NewSuggestionRepository(pool)
+	results, err := repository.GlobalSuggestions(ctx, "tenant-a", 1, 90, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 3 || results[0].ExternalSubjectID != "customer-c" || results[1].ExternalSubjectID != "customer-a" || results[2].ExternalSubjectID != "customer-b" {
+		t.Fatalf("results=%#v", results)
+	}
+	for _, result := range results {
+		if result.ExternalSubjectID == "customer-private" {
+			t.Fatal("fuga entre tenants")
+		}
+	}
+}
+
 const projectionIntegrationSchemaSQL = `
 CREATE TABLE analytics_projection_runs(id BIGSERIAL PRIMARY KEY,projection_name TEXT NOT NULL,projection_version INTEGER NOT NULL,status TEXT NOT NULL,started_at TIMESTAMPTZ NOT NULL,completed_at TIMESTAMPTZ,source_from_updated_at TIMESTAMPTZ,source_from_id BIGINT,source_to_updated_at TIMESTAMPTZ,source_to_id BIGINT,affected_days INTEGER NOT NULL DEFAULT 0,rows_read BIGINT NOT NULL DEFAULT 0,rows_written BIGINT NOT NULL DEFAULT 0,last_error TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE UNIQUE INDEX ux_projection_runs_running_test ON analytics_projection_runs(projection_name,projection_version) WHERE status='running';

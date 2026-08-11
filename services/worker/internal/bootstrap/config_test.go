@@ -76,6 +76,7 @@ func TestLoadConfigAcceptsCompleteSubjectFeatureChain(t *testing.T) {
 	t.Setenv("SUBJECT_QUERY_API_ENABLED", "true")
 	t.Setenv("SUBJECT_SNAPSHOT_URL", "http://principal/internal/analytics/subjects/snapshot")
 	t.Setenv("SUBJECT_SOURCE_TOKEN", "source-secret")
+	t.Setenv("SUBJECT_QUERY_API_TOKEN", "query-secret")
 
 	config, err := LoadConfig("")
 	if err != nil {
@@ -117,6 +118,17 @@ func clearSubjectFeatureFlags(t *testing.T) {
 		"SUBJECT_JOBS_CHECK_INTERVAL_SECONDS",
 		"SUBJECT_JOBS_HEALTH_HTTP_HOST",
 		"SUBJECT_JOBS_HEALTH_HTTP_PORT",
+		"SUBJECT_QUERY_API_TOKEN",
+		"SUBJECT_QUERY_HTTP_HOST",
+		"SUBJECT_QUERY_HTTP_PORT",
+		"SUBJECT_QUERY_READ_TIMEOUT_MS",
+		"SUBJECT_QUERY_WRITE_TIMEOUT_MS",
+		"SUBJECT_SUGGESTION_DEFAULT_LIMIT",
+		"SUBJECT_SUGGESTION_MAX_LIMIT",
+		"SUBJECT_SUGGESTION_CONTEXT_WINDOW_DAYS",
+		"SUBJECT_SUGGESTION_GLOBAL_WINDOW_DAYS",
+		"SUBJECT_SUGGESTION_STALE_AFTER_SECONDS",
+		"SUBJECT_SUGGESTION_SERVE_STALE",
 	} {
 		t.Setenv(key, "")
 	}

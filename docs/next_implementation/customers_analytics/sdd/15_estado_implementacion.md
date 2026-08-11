@@ -33,7 +33,7 @@ Estados permitidos:
 | 3 | `TASK-CA-0301` | Migración `007` y repositorios | GoAnalytics | `done` | Migración 007 up/down y repositorio transaccional de runs, checkpoint y agregado aprobados |
 | 3 | `TASK-CA-0302` | Proyector global incremental | GoAnalytics | `done` | Advisory lock, watermark compuesto, recomputación atómica, tardíos y restart aprobados |
 | 3 | `TASK-CA-0303` | Programar `subject-jobs` | GoAnalytics | `done` | Modos bootstrap/project-global/serve, ejecución al inicio, scheduler diario y operación HTTP aprobados |
-| 3 | `TASK-CA-0304` | Query API y ranking global | GoAnalytics | `pending` | Pendiente |
+| 3 | `TASK-CA-0304` | Query API y ranking global | GoAnalytics | `done` | Proceso separado, Bearer, validación, stale/unavailable/vacío, orden y aislamiento aprobados |
 | 3 | `TASK-CA-0305` | Consumir sugerencias globales | Proyecto principal | `pending` | Pendiente |
 | 4 | `TASK-CA-0401` | Publicar registro de contextos | Proyecto principal | `pending` | Pendiente |
 | 4 | `TASK-CA-0402` | Migración `008`, registro y caché | GoAnalytics | `pending` | Pendiente |

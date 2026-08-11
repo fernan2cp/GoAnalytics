@@ -284,7 +284,7 @@
 
 ### TASK-CA-0304 — Crear Query API Y Ranking Global
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-050`, `REQ-CA-051`, `REQ-CA-052`, `REQ-CA-053`, `REQ-CA-054`, `REQ-CA-055`, `REQ-CA-056`, `REQ-CA-057`, `REQ-CA-058`, `REQ-CA-059`.
 - **Criterios:** `AC-CA-020`, `AC-CA-021`, `AC-CA-022`, `AC-CA-023`, `AC-CA-024`.
@@ -295,7 +295,7 @@
   3. Ordenar por conteo, última asociación e ID externo; devolver solo IDs externos y trazabilidad.
   4. Aplicar estados unavailable, stale, empty y aislamiento por tenant.
   5. Servir stale por defecto dentro del contrato acordado y permitir desactivarlo.
-- **Evidencia:** pendiente: pruebas HTTP, seguridad, aislamiento y carga p95.
+- **Evidencia:** `cmd/query-api` inicia como proceso independiente sin Redis Stream y falla cerrado si flag/token no están configurados. Expone health/readiness/metrics y `GET /v1/internal/subjects/suggestions` con Bearer comparado en tiempo constante, query estricta, tenant/tipo obligatorios, contexto coherente, default 10 y máximo 100. El caso de uso distingue unavailable, stale servido y stale rechazado; vacío serializa `[]`. PostgreSQL consulta solo agregado diario, une tenant en agregado/identidad, filtra active y suma ventana local de 90 días. Orden: association desc, last association desc nulls last e ID externo asc; respuesta solo contiene ID externo y trazabilidad global. Pruebas HTTP cubren auth, parámetros y límites; unitarias cubren frescura/vacío; PostgreSQL real verificó orden y ausencia de fuga entre tenants. Suite y vet aprobaron.
 
 ### TASK-CA-0305 — Integrar Sugerencias Globales En El Proyecto Principal
 
