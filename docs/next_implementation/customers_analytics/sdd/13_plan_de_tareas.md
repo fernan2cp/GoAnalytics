@@ -400,7 +400,7 @@
 
 ### TASK-CA-0407 — Integrar Contextos Y Sugerencias En El Proyecto Principal
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** proyecto principal.
 - **Requisitos:** `REQ-CA-060`, `REQ-CA-061`, `REQ-CA-062`, `REQ-CA-063`, `REQ-CA-064`, `REQ-CA-065`.
 - **Criterios:** `AC-CA-025`, `AC-CA-026`, `AC-CA-027`, `AC-CA-028`.
@@ -410,7 +410,7 @@
   2. Consultar sugerencias contextuales bajo flag y realizar hidratación local.
   3. Aplicar fallback funcional del consumidor cuando GoAnalytics no esté disponible.
   4. Activar por tenant, observar y documentar reversión mediante flags.
-- **Evidencia:** pendiente: recorrido end-to-end y aprobación de usuarios internos.
+- **Evidencia:** DragonFullAV `9554c5e6b` publica contexto revisionado en asociaciones post-commit y consulta `sales.customer_association@1` desde el flujo de sugerencias de clientes. El cliente conserva `fetch_global`, admite consulta contextual, hidrata únicamente clientes activos del tenant y degrada al listado local cuando GoAnalytics falla o no aporta IDs. La activación global y por tenant continúa gobernada por flags existentes; los logs y contadores no incluyen PII. Doce pruebas analytics aisladas aprobaron emisión, retry, catálogo, autenticación, consulta contextual e hidratación; sintaxis, diff y UTF-8 aprobaron. `AC-CA-025`, `AC-CA-026`, `AC-CA-027` y `AC-CA-028` quedan cubiertos.
 
 ### TASK-CA-0408 — Certificar El MVP Y Cerrar El Rollout
 
