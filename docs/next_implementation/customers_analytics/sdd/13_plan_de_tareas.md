@@ -329,7 +329,7 @@
 
 ### TASK-CA-0402 — Crear Migración `008` Y Repositorio Revisionado
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-003`, `REQ-CA-040`, `REQ-CA-041`, `REQ-CA-042`, `REQ-CA-043`, `REQ-CA-044`, `REQ-CA-045`, `REQ-CA-046`.
 - **Criterios:** `AC-CA-017`, `AC-CA-018`.
@@ -340,7 +340,7 @@
   3. Implementar carga memoria → Redis → PostgreSQL → proyecto principal.
   4. Proteger refresh con lock Redis tokenizado y liberación compare-and-delete.
   5. Conservar la última revisión válida cuando una nueva sea inválida.
-- **Evidencia:** pendiente: migración, pruebas de caché/lock y validación de revisiones.
+- **Evidencia:** la migración `008` crea revisiones, definiciones inmutables, entradas por revisión, pendientes no registrados y agregado contextual con claves e índices tenant-first; el recorrido aislado `001 up` a `008 up`, `008 down` y `008 up` aprobó. El dominio valida catálogo, padres, ciclos y checksum; PostgreSQL conserva una única revisión activa y rechaza mutaciones publicadas. La carga sigue memoria → Redis → PostgreSQL → fuente HTTP, conserva el último registro válido y usa lock Redis con token y compare-and-delete. La suite completa y `go vet ./...` aprobaron; la integración contra Redis real confirmó exclusión y liberación propietaria. `AC-CA-017` y `AC-CA-018` quedan cubiertos.
 
 ### TASK-CA-0403 — Resolver Contextos Durante La Normalización
 

@@ -7,11 +7,14 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	goredis "github.com/redis/go-redis/v9"
 
 	"goanalytics/services/worker/internal/adapters/inbound/httphealth"
+	"goanalytics/services/worker/internal/adapters/outbound/httpregistry"
 	"goanalytics/services/worker/internal/adapters/outbound/httpsnapshot"
 	metricsadapter "goanalytics/services/worker/internal/adapters/outbound/metrics"
 	postgresadapter "goanalytics/services/worker/internal/adapters/outbound/postgres"
+	redisadapter "goanalytics/services/worker/internal/adapters/outbound/redis"
 	"goanalytics/services/worker/internal/application/usecases"
 )
 
@@ -21,12 +24,14 @@ type SubjectJobsContainer struct {
 	Bootstrap     *usecases.BootstrapSubjects
 	ProjectGlobal *usecases.ProjectGlobal
 	Scheduler     *usecases.ProjectionScheduler
+	Registry      *usecases.ContextRegistryLoader
+	Redis         *goredis.Client
 	Health        http.Handler
 }
 
 // NewSubjectJobsContainer construye el cliente, repositorio y caso de uso.
 func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsContainer, error) {
-	if !config.SubjectBootstrapEnabled && !config.SubjectProjectionEnabled {
+	if !config.SubjectBootstrapEnabled && !config.SubjectProjectionEnabled && !config.SubjectContextRegistryEnabled {
 		return nil, fmt.Errorf("jobs de sujetos deshabilitados")
 	}
 	pool, err := pgxpool.New(ctx, config.PostgresDSN())
@@ -69,6 +74,29 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 		}
 		container.Scheduler = usecases.NewProjectionScheduler(repository, container.ProjectGlobal, config.SubjectProjectionVersion, config.SubjectProjectionInterval, config.SubjectJobsCheckInterval)
 	}
+	if config.SubjectContextRegistryEnabled {
+		redisClient := goredis.NewClient(&goredis.Options{Addr: config.RedisAddr, Username: config.RedisUsername, Password: config.RedisPassword, DB: config.RedisDB})
+		if pingErr := redisClient.Ping(ctx).Err(); pingErr != nil {
+			pool.Close()
+			_ = redisClient.Close()
+			return nil, pingErr
+		}
+		cache := redisadapter.NewContextRegistryCache(redisClient, config.SubjectContextRegistryTTL, config.SubjectContextRegistryLockTTL)
+		repository, repositoryErr := postgresadapter.NewContextRegistryRepository(pool)
+		if repositoryErr != nil {
+			pool.Close()
+			_ = redisClient.Close()
+			return nil, repositoryErr
+		}
+		source, sourceErr := httpregistry.NewClient(config.SubjectContextRegistryURL, config.SubjectContextRegistryToken, config.SubjectContextRegistryTimeout)
+		if sourceErr != nil {
+			pool.Close()
+			_ = redisClient.Close()
+			return nil, sourceErr
+		}
+		container.Redis = redisClient
+		container.Registry = usecases.NewContextRegistryLoader(cache, cache, repository, source)
+	}
 	ready := httphealth.NewReadyHandler(pool.Ping)
 	operational := httphealth.NewRouterWithMetrics(httphealth.NewHealthHandler(), ready, metrics.Handler())
 	mux := http.NewServeMux()
@@ -89,5 +117,8 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 func (container *SubjectJobsContainer) Close() {
 	if container != nil && container.Postgres != nil {
 		container.Postgres.Close()
+	}
+	if container != nil && container.Redis != nil {
+		_ = container.Redis.Close()
 	}
 }

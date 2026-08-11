@@ -77,6 +77,8 @@ func TestLoadConfigAcceptsCompleteSubjectFeatureChain(t *testing.T) {
 	t.Setenv("SUBJECT_SNAPSHOT_URL", "http://principal/internal/analytics/subjects/snapshot")
 	t.Setenv("SUBJECT_SOURCE_TOKEN", "source-secret")
 	t.Setenv("SUBJECT_QUERY_API_TOKEN", "query-secret")
+	t.Setenv("SUBJECT_CONTEXT_REGISTRY_URL", "http://principal/internal/analytics/context-registry")
+	t.Setenv("SUBJECT_CONTEXT_REGISTRY_TOKEN", "registry-secret")
 
 	config, err := LoadConfig("")
 	if err != nil {
@@ -129,6 +131,11 @@ func clearSubjectFeatureFlags(t *testing.T) {
 		"SUBJECT_SUGGESTION_GLOBAL_WINDOW_DAYS",
 		"SUBJECT_SUGGESTION_STALE_AFTER_SECONDS",
 		"SUBJECT_SUGGESTION_SERVE_STALE",
+		"SUBJECT_CONTEXT_REGISTRY_URL",
+		"SUBJECT_CONTEXT_REGISTRY_TOKEN",
+		"SUBJECT_CONTEXT_REGISTRY_TIMEOUT_MS",
+		"SUBJECT_CONTEXT_REGISTRY_TTL_SECONDS",
+		"SUBJECT_CONTEXT_REGISTRY_LOCK_TTL_SECONDS",
 	} {
 		t.Setenv(key, "")
 	}

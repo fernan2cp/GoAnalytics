@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "serve", "modo: serve, bootstrap o project-global")
+	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global o refresh-registry")
 	flag.Parse()
 	if err := run(*mode); err != nil {
 		fmt.Fprintf(os.Stderr, "subject-jobs: %v\n", err)
@@ -24,7 +24,7 @@ func main() {
 }
 
 func run(mode string) error {
-	if mode != "bootstrap" && mode != "project-global" && mode != "serve" {
+	if mode != "bootstrap" && mode != "project-global" && mode != "refresh-registry" && mode != "serve" {
 		return fmt.Errorf("modo no soportado: %s", mode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -49,6 +49,12 @@ func run(mode string) error {
 			return fmt.Errorf("proyección global deshabilitada")
 		}
 		return container.ProjectGlobal.Run(ctx)
+	case "refresh-registry":
+		if container.Registry == nil {
+			return fmt.Errorf("registro de contextos deshabilitado")
+		}
+		_, err := container.Registry.Active(ctx)
+		return err
 	default:
 		if container.Scheduler == nil {
 			return fmt.Errorf("scheduler de proyección deshabilitado")

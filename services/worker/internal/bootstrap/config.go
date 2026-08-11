@@ -87,6 +87,11 @@ type Config struct {
 	SubjectSuggestionGlobalDays   int
 	SubjectSuggestionStaleAfter   time.Duration
 	SubjectSuggestionServeStale   bool
+	SubjectContextRegistryURL     string
+	SubjectContextRegistryToken   string
+	SubjectContextRegistryTimeout time.Duration
+	SubjectContextRegistryTTL     time.Duration
+	SubjectContextRegistryLockTTL time.Duration
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -154,6 +159,11 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		SubjectSuggestionGlobalDays:   90,
 		SubjectSuggestionStaleAfter:   48 * time.Hour,
 		SubjectSuggestionServeStale:   true,
+		SubjectContextRegistryURL:     getEnv("SUBJECT_CONTEXT_REGISTRY_URL", ""),
+		SubjectContextRegistryToken:   getEnv("SUBJECT_CONTEXT_REGISTRY_TOKEN", ""),
+		SubjectContextRegistryTimeout: 2 * time.Second,
+		SubjectContextRegistryTTL:     24 * time.Hour,
+		SubjectContextRegistryLockTTL: 30 * time.Second,
 	}
 
 	var err error
@@ -273,6 +283,15 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.SubjectSuggestionServeStale, err = getEnvBool("SUBJECT_SUGGESTION_SERVE_STALE", config.SubjectSuggestionServeStale); err != nil {
 		return Config{}, err
 	}
+	if config.SubjectContextRegistryTimeout, err = getEnvMillis("SUBJECT_CONTEXT_REGISTRY_TIMEOUT_MS", config.SubjectContextRegistryTimeout); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectContextRegistryTTL, err = getEnvSeconds("SUBJECT_CONTEXT_REGISTRY_TTL_SECONDS", config.SubjectContextRegistryTTL); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectContextRegistryLockTTL, err = getEnvSeconds("SUBJECT_CONTEXT_REGISTRY_LOCK_TTL_SECONDS", config.SubjectContextRegistryLockTTL); err != nil {
+		return Config{}, err
+	}
 	if err := config.validateSubjectFeatures(); err != nil {
 		return Config{}, err
 	}
@@ -303,6 +322,9 @@ func (config Config) validateSubjectFeatures() error {
 	}
 	if config.SubjectContextRegistryEnabled && !config.SubjectAnalyticsEnabled {
 		return fmt.Errorf("SUBJECT_CONTEXT_REGISTRY_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
+	}
+	if config.SubjectContextRegistryEnabled && (strings.TrimSpace(config.SubjectContextRegistryURL) == "" || strings.TrimSpace(config.SubjectContextRegistryToken) == "") {
+		return fmt.Errorf("SUBJECT_CONTEXT_REGISTRY_ENABLED requiere URL y token")
 	}
 	if config.SubjectQueryAPIEnabled && !config.SubjectProjectionEnabled {
 		return fmt.Errorf("SUBJECT_QUERY_API_ENABLED requiere SUBJECT_PROJECTION_ENABLED")
