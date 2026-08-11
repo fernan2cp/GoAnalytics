@@ -181,7 +181,7 @@
 
 ### TASK-CA-0201 — Publicar Snapshot Revisionado En El Proyecto Principal
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** proyecto principal.
 - **Requisitos:** `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-028`, `REQ-CA-029`.
 - **Criterios:** `AC-CA-012`.
@@ -192,7 +192,7 @@
   3. Mantener `source_revision` estable durante toda la lectura.
   4. Responder `409 snapshot_revision_expired` cuando ya no pueda continuar la revisión.
   5. Incluir lifecycle y precedencia suficiente para converger con eventos en vivo.
-- **Evidencia:** pendiente: contrato, pruebas paginadas, revisión expirada y reanudación.
+- **Evidencia:** DragonFullAV `923a7d221` publica `GET /internal/analytics/subjects/snapshot` bajo flag apagado por defecto y Bearer dedicado. Materializa un corte inmutable de todos los tenants activos durante dos horas, ordena por tenant e ID externo, limita páginas a 500 y firma cursores opacos vinculados a la revisión. El payload contiene exclusivamente identidad técnica, lifecycle y precedencia; el contrato admite active, inactive y merged, mientras la fuente actual materializa active/inactive porque el modelo principal aún no registra fusiones. Revisión vencida produce `409 snapshot_revision_expired`; cursor inválido produce `400`. Nueve pruebas aprobaron paginación, estabilidad, manipulación, expiración, autenticación y regresión del resolver; `py_compile`, `git diff --check` y UTF-8 aprobaron.
 
 ### TASK-CA-0202 — Crear Cliente De Snapshot Y Bootstrap En `subject-jobs`
 

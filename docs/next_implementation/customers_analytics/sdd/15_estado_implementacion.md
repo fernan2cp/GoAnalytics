@@ -26,7 +26,7 @@ Estados permitidos:
 | 1 | `TASK-CA-0104` | Normalización 1:N tenant-first | GoAnalytics | `done` | Normalización opt-in, atomicidad, convergencia concurrente, fallos semánticos e idempotencia entre sites aprobados |
 | 1 | `TASK-CA-0105` | Lifecycle monotónico y merge | GoAnalytics | `done` | Precedencia compuesta, no-op auditable, deactivate/reactivate, merge y elegibilidad aprobados |
 | 1 | `TASK-CA-0106` | Emisión desde proyecto principal | Proyecto principal | `done` | Emisor post-commit opt-in, retry directo, idempotencia, lifecycle y degradación aprobados; Dragon `2747c0fdf` |
-| 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `pending` | Pendiente |
+| 2 | `TASK-CA-0201` | Snapshot revisionado | Proyecto principal | `done` | Corte inmutable por 2 h, cursor firmado, límite 500, auth y expiración aprobados; Dragon `923a7d221` |
 | 2 | `TASK-CA-0202` | Cliente de snapshot y bootstrap | GoAnalytics | `pending` | Pendiente |
 | 2 | `TASK-CA-0203` | Convergencia de identidades | GoAnalytics | `pending` | Pendiente |
 | 2 | `TASK-CA-0204` | Certificar backfill inicial | Ambos proyectos | `pending` | Pendiente |
