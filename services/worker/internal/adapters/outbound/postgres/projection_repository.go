@@ -94,6 +94,16 @@ func (repository *ProjectionRepository) LoadCheckpoint(ctx context.Context, name
 	return watermark, err
 }
 
+// LastCompletedAt obtiene el último éxito para evaluar vencimiento.
+func (repository *ProjectionRepository) LastCompletedAt(ctx context.Context, name string, version int) (time.Time, error) {
+	var completed time.Time
+	err := repository.pool.QueryRow(ctx, `SELECT completed_at FROM analytics_projection_runs WHERE projection_name=$1 AND projection_version=$2 AND status='completed' ORDER BY completed_at DESC,id DESC LIMIT 1`, name, version).Scan(&completed)
+	if err == pgx.ErrNoRows {
+		return time.Time{}, nil
+	}
+	return completed, err
+}
+
 // LoadAffectedDays lee el siguiente lote en orden total y deduplica sus claves.
 func (repository *ProjectionRepository) LoadAffectedDays(ctx context.Context, after subject.ProjectionWatermark, limit int) ([]subject.AffectedDay, subject.ProjectionWatermark, int64, error) {
 	fromTime := after.UpdatedAt

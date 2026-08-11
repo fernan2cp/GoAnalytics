@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"time"
 
 	"goanalytics/services/worker/internal/domain/subject"
 )
@@ -21,4 +22,5 @@ type GlobalProjectionRepository interface {
 	LoadCheckpoint(ctx context.Context, name string, version int) (subject.ProjectionWatermark, error)
 	LoadAffectedDays(ctx context.Context, after subject.ProjectionWatermark, limit int) ([]subject.AffectedDay, subject.ProjectionWatermark, int64, error)
 	RecomputeDaysAndCheckpoint(ctx context.Context, name string, version int, days []subject.AffectedDay, to subject.ProjectionWatermark) (int64, error)
+	LastCompletedAt(ctx context.Context, name string, version int) (time.Time, error)
 }

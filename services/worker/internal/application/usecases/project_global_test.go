@@ -63,6 +63,9 @@ func (fake *projectionRepositoryFake) RecomputeDaysAndCheckpoint(context.Context
 	}
 	return 1, nil
 }
+func (fake *projectionRepositoryFake) LastCompletedAt(context.Context, string, int) (time.Time, error) {
+	return time.Time{}, nil
+}
 
 func TestProjectGlobalProcessesIncrementalBatches(t *testing.T) {
 	day := subject.AffectedDay{TenantID: "tenant-1", SubjectID: 1, LocalDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), TimezoneName: "UTC"}

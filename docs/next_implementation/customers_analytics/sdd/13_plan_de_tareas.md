@@ -270,7 +270,7 @@
 
 ### TASK-CA-0303 — Programar Proyección En `subject-jobs`
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-064`.
 - **Criterios:** `AC-CA-014`, `AC-CA-027`.
@@ -280,7 +280,7 @@
   2. Ejecutar cada 86.400 segundos y al iniciar si no existe ejecución vigente.
   3. Exponer health, readiness, estado de última ejecución y cierre ordenado.
   4. Evitar ejecuciones duplicadas ante múltiples réplicas mediante el lock PostgreSQL.
-- **Evidencia:** pendiente: prueba temporal acelerada, restart y despliegue independiente.
+- **Evidencia:** `subject-jobs` admite `bootstrap`, `project-global` y `serve`; el contenedor construye solo las capacidades habilitadas y no requiere Redis para proyección. `serve` expone `/health`, `/ready`, `/metrics` y `/status`, ejecuta al iniciar cuando no hay éxito o está vencido, y reevalúa cada 60 segundos por defecto. Intervalo 86.400s, stale 172.800s, batch, versión y puerto son configurables y validados. El cierre por señal detiene HTTP en hasta 10s; el advisory lock mantiene una sola ejecución efectiva entre réplicas. Pruebas aceleradas cubren inicio sin run y omisión con run fresco; suite completa y vet del worker aprobaron. El Dockerfile parametrizable ya construye la imagen independiente con `WORKER_COMMAND=subject-jobs`.
 
 ### TASK-CA-0304 — Crear Query API Y Ranking Global
 

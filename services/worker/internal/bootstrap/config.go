@@ -69,6 +69,13 @@ type Config struct {
 	SubjectSourceToken            string
 	SubjectSnapshotTimeout        time.Duration
 	SubjectBootstrapPageSize      int
+	SubjectProjectionInterval     time.Duration
+	SubjectProjectionStaleAfter   time.Duration
+	SubjectProjectionBatchSize    int
+	SubjectProjectionVersion      int
+	SubjectJobsCheckInterval      time.Duration
+	SubjectJobsHealthHTTPHost     string
+	SubjectJobsHealthHTTPPort     int
 }
 
 // LoadConfig carga configuracion del worker desde dotenv opcional y entorno.
@@ -112,14 +119,20 @@ func LoadConfig(dotenvPath string) (Config, error) {
 		SiteResolverToken:   getEnv("SITE_RESOLVER_TOKEN", ""),
 		SiteResolverTimeout: 300 * time.Millisecond,
 
-		SiteRehydrateCooldown:    300 * time.Second,
-		SiteNegativeCacheTTL:     300 * time.Second,
-		SiteCacheTTL:             time.Hour,
-		DeduplicationTTL:         24 * time.Hour,
-		SubjectSnapshotURL:       getEnv("SUBJECT_SNAPSHOT_URL", ""),
-		SubjectSourceToken:       getEnv("SUBJECT_SOURCE_TOKEN", ""),
-		SubjectSnapshotTimeout:   5 * time.Second,
-		SubjectBootstrapPageSize: 500,
+		SiteRehydrateCooldown:       300 * time.Second,
+		SiteNegativeCacheTTL:        300 * time.Second,
+		SiteCacheTTL:                time.Hour,
+		DeduplicationTTL:            24 * time.Hour,
+		SubjectSnapshotURL:          getEnv("SUBJECT_SNAPSHOT_URL", ""),
+		SubjectSourceToken:          getEnv("SUBJECT_SOURCE_TOKEN", ""),
+		SubjectSnapshotTimeout:      5 * time.Second,
+		SubjectBootstrapPageSize:    500,
+		SubjectProjectionInterval:   24 * time.Hour,
+		SubjectProjectionStaleAfter: 48 * time.Hour,
+		SubjectProjectionBatchSize:  5000,
+		SubjectProjectionVersion:    1,
+		SubjectJobsCheckInterval:    time.Minute,
+		SubjectJobsHealthHTTPHost:   getEnv("SUBJECT_JOBS_HEALTH_HTTP_HOST", "0.0.0.0"),
 	}
 
 	var err error
@@ -194,6 +207,24 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	if config.SubjectBootstrapPageSize, err = getEnvInt("SUBJECT_BOOTSTRAP_PAGE_SIZE", config.SubjectBootstrapPageSize); err != nil {
 		return Config{}, err
 	}
+	if config.SubjectProjectionInterval, err = getEnvSeconds("SUBJECT_PROJECTION_INTERVAL_SECONDS", config.SubjectProjectionInterval); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectProjectionStaleAfter, err = getEnvSeconds("SUBJECT_PROJECTION_STALE_AFTER_SECONDS", config.SubjectProjectionStaleAfter); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectProjectionBatchSize, err = getEnvInt("SUBJECT_PROJECTION_BATCH_SIZE", config.SubjectProjectionBatchSize); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectProjectionVersion, err = getEnvInt("SUBJECT_PROJECTION_VERSION", config.SubjectProjectionVersion); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectJobsCheckInterval, err = getEnvSeconds("SUBJECT_JOBS_CHECK_INTERVAL_SECONDS", config.SubjectJobsCheckInterval); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectJobsHealthHTTPPort, err = getEnvInt("SUBJECT_JOBS_HEALTH_HTTP_PORT", 8080); err != nil {
+		return Config{}, err
+	}
 	if err := config.validateSubjectFeatures(); err != nil {
 		return Config{}, err
 	}
@@ -216,6 +247,9 @@ func (config Config) validateSubjectFeatures() error {
 	if config.SubjectBootstrapPageSize < 1 || config.SubjectBootstrapPageSize > 500 {
 		return fmt.Errorf("SUBJECT_BOOTSTRAP_PAGE_SIZE debe estar entre 1 y 500")
 	}
+	if config.SubjectProjectionBatchSize < 1 || config.SubjectProjectionVersion < 1 || config.SubjectProjectionInterval <= 0 || config.SubjectProjectionStaleAfter <= 0 || config.SubjectJobsCheckInterval <= 0 {
+		return fmt.Errorf("configuración de proyección inválida")
+	}
 	if config.SubjectProjectionEnabled && !config.SubjectAnalyticsEnabled {
 		return fmt.Errorf("SUBJECT_PROJECTION_ENABLED requiere SUBJECT_ANALYTICS_ENABLED")
 	}
@@ -226,6 +260,11 @@ func (config Config) validateSubjectFeatures() error {
 		return fmt.Errorf("SUBJECT_QUERY_API_ENABLED requiere SUBJECT_PROJECTION_ENABLED")
 	}
 	return nil
+}
+
+// SubjectJobsHealthAddress devuelve host:port del proceso subject-jobs.
+func (config Config) SubjectJobsHealthAddress() string {
+	return net.JoinHostPort(config.SubjectJobsHealthHTTPHost, strconv.Itoa(config.SubjectJobsHealthHTTPPort))
 }
 
 // HealthAddress devuelve la direccion HTTP operativa host:port del worker.
