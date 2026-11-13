@@ -2,7 +2,7 @@
 
 ## 1. Estado Del Paquete
 
-El tablero conserva el baseline inicial y registra la ejecución secuencial completa. Al 2026-08-11 las 28 tareas del MVP están implementadas y aceptadas con evidencia reproducible.
+El tablero conserva la certificación histórica de agosto. La auditoría del 2026-11-13 reabrió el cierre: las tareas `TASK-CA-0501` a `TASK-CA-0506` del plan vigente prevalecen sobre los estados históricos. El MVP no está aprobado para rollout hasta completar esa recertificación.
 
 Estados permitidos:
 
@@ -104,3 +104,16 @@ Para cambiar una tarea a `done` se debe:
 5. actualizar el gate de fase si todas sus tareas están aceptadas.
 
 No se debe inferir avance por la sola existencia de código: sin evidencia reproducible, el estado permanece `pending`.
+
+## 6. Tareas Adicionales De Configuración
+
+| Fase | Tarea | Resumen | Responsable | Estado | Evidencia |
+|---|---|---|---|---|---|
+| Configuración | `TASK-CA-CFG-0001` | Backup previo del compose de GoAnalytics | GoAnalytics | `done` | Backup byte a byte fuera del repositorio; 3.346 bytes y SHA-256 `0AAAC09AA127203C787F4901BD807C92CFE50FAEA38D1C4F8F930450A273BA8F` verificados antes de editar el compose |
+| Configuración | `TASK-CA-CFG-0002` | Instructivo resumido para producción | GoAnalytics | `done` | `docs/next_implementation/customers_analytics/instructivo_configuracion_mvp_produccion.md` versionado; variables, procesos, smoke tests, rollback y checklist documentados sin secretos |
+
+## 7. Bloqueo Técnico Para La Activación De Asociaciones
+
+| Hallazgo | Estado | Evidencia | Acción requerida |
+|---|---|---|---|
+| El emisor server no envía `token_version`; el resolver recibe `0` y responde `422` | `pending` | En desarrollo, el evento interno obtuvo `202`, pero GoAnalytics persistió `site_unresolved`; el endpoint de resolución acepta la misma solicitud con `token_version=1` | Corregir el contrato en DragonFullAV o GoAnalytics y agregar prueba de asociación y lifecycle antes de liberar producción |

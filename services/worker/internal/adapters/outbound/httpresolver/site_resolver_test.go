@@ -100,3 +100,28 @@ func TestSiteResolverKeepsLegacyRequestAndResponseCompatible(t *testing.T) {
 		t.Fatalf("Timezone = %q, want empty legacy value", config.Timezone)
 	}
 }
+
+func TestSiteResolverServerWithoutTrackingVersionUsesCompatibleContract(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var input resolveRequest
+		if err := json.NewDecoder(request.Body).Decode(&input); err != nil {
+			t.Error(err)
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if input.Source != "server" || input.TokenVersion < 1 || input.Origin != "" {
+			writer.WriteHeader(http.StatusUnprocessableEntity)
+			return
+		}
+		_, _ = writer.Write([]byte(`{"site_code":"s","tenant_id":"t","site_id":"1","status":"active","tracking_enabled":true,"allowed_domains":["example.com"]}`))
+	}))
+	defer server.Close()
+	resolver, err := NewSiteResolver(server.URL, "", time.Second, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := resolver.Resolve(context.Background(), outbound.ResolveSiteInput{SiteCode: "s", Environment: "production", Source: "server"})
+	if err != nil || config.TokenVersion != 1 {
+		t.Fatalf("config=%#v err=%v", config, err)
+	}
+}

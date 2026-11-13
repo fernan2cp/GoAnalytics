@@ -76,6 +76,11 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 	if resolver == nil || resolver.client == nil {
 		return site.SiteConfig{}, ErrResolverURLRequired
 	}
+	// El perfil server no lleva versión de tracking; el resolver compartido
+	// exige una versión positiva incluso cuando no valida un JWT de navegador.
+	if input.Source == site.SourceServer && input.TokenVersion <= 0 {
+		input.TokenVersion = 1
+	}
 	if resolver.gate != nil {
 		if err := resolver.gate.Allow(ctx, input.SiteCode); err != nil {
 			return site.SiteConfig{}, err

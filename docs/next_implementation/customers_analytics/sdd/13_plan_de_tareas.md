@@ -434,3 +434,95 @@ La ruta crítica mínima es:
 `TASK-CA-0001` → `TASK-CA-0002` → `TASK-CA-0003` → `TASK-CA-0101` → `TASK-CA-0102` → `TASK-CA-0104` → `TASK-CA-0105` → `TASK-CA-0201` → `TASK-CA-0202` → `TASK-CA-0203` → `TASK-CA-0204` → `TASK-CA-0301` → `TASK-CA-0302` → `TASK-CA-0304` → `TASK-CA-0305` → `TASK-CA-0401` → `TASK-CA-0402` → `TASK-CA-0403` → `TASK-CA-0404` → `TASK-CA-0405` → `TASK-CA-0406` → `TASK-CA-0407` → `TASK-CA-0408`.
 
 La preparación operativa puede avanzar en paralelo después de `TASK-CA-0003`, pero cada gate exige su evidencia antes de habilitar la fase siguiente.
+
+## 8. Tareas Adicionales De Configuración Y Liberación
+
+### TASK-CA-CFG-0001 — Crear Backup Previo Del Compose De GoAnalytics
+
+- **Estado:** `done`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-064`, `REQ-CA-066`.
+- **Criterios:** respaldo byte a byte verificable y restauración documentada.
+- **Dependencias:** ninguna; debe ejecutarse antes de editar `docker-compose-devel.yml`.
+- **Acciones:**
+  1. Copiar el compose sin transformaciones a un directorio temporal fuera del repositorio.
+  2. No sobrescribir backups previos.
+  3. Registrar tamaño, timestamp y SHA-256.
+  4. Confirmar identidad byte a byte y conservar el procedimiento de restauración.
+- **Evidencia:** backup creado en `C:\Users\FAJ30\AppData\Local\Temp\goanalytics-config-backups\docker-compose-devel.yml.20260811-093735.bak`, con 3.346 bytes y SHA-256 `0AAAC09AA127203C787F4901BD807C92CFE50FAEA38D1C4F8F930450A273BA8F`, coincidente con el archivo original antes de la actualización. El directorio está fuera del repositorio y no aparece en Git.
+
+### TASK-CA-CFG-0002 — Publicar Instructivo Resumido Para Producción
+
+- **Estado:** `done`
+- **Responsable:** GoAnalytics.
+- **Requisitos:** `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** configuración reproducible, smoke tests, rollback y checklist sin secretos versionados.
+- **Dependencias:** `TASK-CA-CFG-0001` y configuración de desarrollo.
+- **Acciones:**
+  1. Documentar variables de ambos proyectos y los cuatro tokens dedicados.
+  2. Documentar procesos, orden de activación, endpoints y validaciones.
+  3. Diferenciar host-to-container de container-to-container.
+  4. Documentar rollback por flags y detención de binarios.
+- **Evidencia:** instructivo versionado en `docs/next_implementation/customers_analytics/instructivo_configuracion_mvp_produccion.md`; no contiene secretos reales y cubre prerrequisitos, variables, smoke tests, SQL de verificación, rollback y checklist de liberación.
+
+## 9. Hallazgo Abierto De Integración
+
+La configuración quedó aplicada y los procesos están saludables, pero la primera asociación server-to-server no se normaliza todavía: DragonFullAV omite `token_version`, GoAnalytics envía `0` al resolver y DragonFullAV responde `422`. El evento termina como `site_unresolved`. La corrección debe realizarse en el contrato de código —enviar versión `1` para server o aceptar ausencia/cero como versión server— y cubrirse con pruebas antes de activar producción.
+
+## 10. Correcciones De Cierre — 2026-11-13
+
+La evidencia de agosto es histórica. Estas tareas reabren la certificación del MVP y prevalecen sobre el cierre previo hasta completar las validaciones reales.
+
+### TASK-CA-0501 — Corregir Contrato Server Del Resolver
+
+- **Estado:** `done`
+- **Requisitos:** `REQ-CA-013`, `REQ-CA-014`, `REQ-CA-015`.
+- **Criterios:** `AC-CA-005`, `AC-CA-006`, `AC-CA-007`.
+- **Dependencias:** ninguna.
+- **Acciones:** normalizar la versión ausente del perfil server al consultar el resolver, conservar el perfil web y probar el contrato que exige versión positiva.
+- **Evidencia:** `go test ./... -count=1` en worker aprobado el 2026-11-13 fuera del sandbox. `TestSiteResolverServerWithoutTrackingVersionUsesCompatibleContract` rechaza solicitudes incompatibles y verifica versión positiva sin origin. No se agrega `token_version` al payload HTTP interno estricto.
+
+### TASK-CA-0502 — Refrescar Registro Revisionado
+
+- **Estado:** `pending`
+- **Requisitos:** `REQ-CA-040`, `REQ-CA-044`, `REQ-CA-045`, `REQ-CA-046`.
+- **Criterios:** `AC-CA-017`, `AC-CA-018`.
+- **Dependencias:** `TASK-CA-0501`.
+- **Acciones:** implementar refresh explícito y vencimiento de memoria con fallback a la última revisión válida; probar cambio de revisión y fuente inválida.
+- **Evidencia:** pendiente.
+
+### TASK-CA-0503 — Alinear Bootstrap Y Recuperación
+
+- **Estado:** `pending`
+- **Requisitos:** `REQ-CA-028`, `REQ-CA-029`, `REQ-CA-030`, `REQ-CA-031`.
+- **Criterios:** `AC-CA-012`, `AC-CA-013`.
+- **Dependencias:** `TASK-CA-0502`.
+- **Acciones:** implementar `--force-new-snapshot`, reanudación de errores recuperables, expiración explícita y exclusión de procesos concurrentes.
+- **Evidencia:** pendiente.
+
+### TASK-CA-0504 — Asegurar Snapshot Lifecycle De La Fuente
+
+- **Estado:** `pending`
+- **Requisitos:** `REQ-CA-022`, `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-031`.
+- **Criterios:** `AC-CA-010`, `AC-CA-012`, `AC-CA-013`.
+- **Dependencias:** `TASK-CA-0503`.
+- **Acciones:** usar versiones de mutación reales, soportar estados requeridos y probar el cargador real sin depender exclusivamente de filas simuladas.
+- **Evidencia:** pendiente.
+
+### TASK-CA-0505 — Recuperar Proyecciones Independientes
+
+- **Estado:** `pending`
+- **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-058`.
+- **Criterios:** `AC-CA-014`, `AC-CA-023`, `AC-CA-027`.
+- **Dependencias:** `TASK-CA-0504`.
+- **Acciones:** evaluar vencimiento global/contextual por separado y reintentar fallos sin terminar el scheduler; comprobar frescura de la proyección servida.
+- **Evidencia:** pendiente.
+
+### TASK-CA-0506 — Recertificar Recorrido Cruzado Y Operación
+
+- **Estado:** `pending`
+- **Requisitos:** `REQ-CA-001`, `REQ-CA-011`, `REQ-CA-060`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-001`, `AC-CA-025`, `AC-CA-026`, `AC-CA-028`, `AC-CA-029`, `AC-CA-030`.
+- **Dependencias:** `TASK-CA-0505`.
+- **Acciones:** verificar emisión real, HTTP, stream, resolver, normalización, proyección e hidratación en infraestructura aislada; actualizar instructivo y evidencias sin secretos ni datos sintéticos en las bases de negocio.
+- **Evidencia:** pendiente.
