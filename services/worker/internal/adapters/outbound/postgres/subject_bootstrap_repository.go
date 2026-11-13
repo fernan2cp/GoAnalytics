@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"goanalytics/services/worker/internal/application/ports/outbound"
 
 	"goanalytics/services/worker/internal/domain/subject"
 )
@@ -22,10 +23,27 @@ func NewSubjectBootstrapRepository(pool *pgxpool.Pool) (*SubjectBootstrapReposit
 }
 
 // BeginOrResume recupera la ejecución activa o crea una nueva.
-func (repository *SubjectBootstrapRepository) BeginOrResume(ctx context.Context) (subject.BootstrapState, error) {
+func (repository *SubjectBootstrapRepository) BeginOrResume(ctx context.Context, forceNew ...bool) (subject.BootstrapState, error) {
 	var state subject.BootstrapState
-	err := repository.pool.QueryRow(ctx, `SELECT id,COALESCE(cursor,''),COALESCE(source_revision,''),processed_count,failed_count FROM analytics_subject_bootstrap WHERE subject_type='customer' AND status='running' ORDER BY id DESC LIMIT 1`).Scan(&state.ID, &state.Cursor, &state.SourceRevision, &state.ProcessedCount, &state.FailedCount)
+	var status, cause string
+	err := repository.pool.QueryRow(ctx, `SELECT id,COALESCE(cursor,''),COALESCE(source_revision,''),processed_count,failed_count,status,COALESCE(last_error,'') FROM analytics_subject_bootstrap WHERE subject_type='customer' ORDER BY id DESC LIMIT 1`).Scan(&state.ID, &state.Cursor, &state.SourceRevision, &state.ProcessedCount, &state.FailedCount, &status, &cause)
+	if len(forceNew) > 0 && forceNew[0] {
+		if err != nil && err != pgx.ErrNoRows {
+			return state, err
+		}
+		return repository.RestartExpired(ctx, state)
+	}
 	if err == nil {
+		if status == "completed" {
+			return state, subject.ErrBootstrapCompleted
+		}
+		if cause == "snapshot_revision_expired" {
+			return state, subject.ErrBootstrapExpired
+		}
+		_, err = repository.pool.Exec(ctx, `UPDATE analytics_subject_bootstrap SET status='running',completed_at=NULL,last_error=NULL,updated_at=now() WHERE id=$1`, state.ID)
+		if err != nil {
+			return state, err
+		}
 		return state, nil
 	}
 	if err != pgx.ErrNoRows {
@@ -33,6 +51,13 @@ func (repository *SubjectBootstrapRepository) BeginOrResume(ctx context.Context)
 	}
 	err = repository.pool.QueryRow(ctx, `INSERT INTO analytics_subject_bootstrap(subject_type,status,started_at) VALUES('customer','running',now()) RETURNING id`).Scan(&state.ID)
 	return state, err
+}
+
+// TryBootstrapLock excluye importaciones concurrentes durante todo el recorrido.
+// Recibe contexto y devuelve lock de sesión, adquisición y error de PostgreSQL.
+func (repository *SubjectBootstrapRepository) TryBootstrapLock(ctx context.Context) (outbound.ProjectionLock, bool, error) {
+	projection := &ProjectionRepository{pool: repository.pool}
+	return projection.TryLock(ctx, "subject_bootstrap", 1)
 }
 
 // ApplyPage aplica lifecycle monotónico y avanza el cursor en la misma transacción.
@@ -72,14 +97,14 @@ func upsertSnapshotSubject(ctx context.Context, tx pgx.Tx, row subject.SnapshotR
 	return err
 }
 
-// RestartExpired cierra el intento vencido y abre uno desde la primera página.
+// RestartExpired abre un corte nuevo por solicitud explícita del operador.
 func (repository *SubjectBootstrapRepository) RestartExpired(ctx context.Context, state subject.BootstrapState) (subject.BootstrapState, error) {
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
 		return state, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `UPDATE analytics_subject_bootstrap SET status='failed',completed_at=now(),last_error='snapshot_revision_expired',updated_at=now() WHERE id=$1`, state.ID); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE analytics_subject_bootstrap SET status='failed',completed_at=now(),last_error='replaced_by_operator',updated_at=now() WHERE id=$1 AND status='running'`, state.ID); err != nil {
 		return state, err
 	}
 	var next subject.BootstrapState

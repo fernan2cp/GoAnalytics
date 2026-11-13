@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"goanalytics/services/worker/internal/application/ports/outbound"
+	"goanalytics/services/worker/internal/domain/subject"
 )
 
 // ErrSnapshotRevisionExpired identifica el 409 revision_expired de la fuente.
@@ -28,27 +29,37 @@ func NewBootstrapSubjects(source outbound.SubjectSnapshotSource, repo outbound.S
 	return &BootstrapSubjects{source: source, repo: repo, metrics: metrics, pageSize: pageSize}, nil
 }
 
-// Run reanuda el último checkpoint y reinicia si la revisión dejó de existir.
-func (useCase *BootstrapSubjects) Run(ctx context.Context) error {
+// Run reanuda el último checkpoint. Una revisión vencida requiere intervención
+// explícita con forceNew=true; una ejecución completada es un no-op.
+func (useCase *BootstrapSubjects) Run(ctx context.Context, forceNew ...bool) error {
 	started := time.Now()
-	state, err := useCase.repo.BeginOrResume(ctx)
+	lock, acquired, err := useCase.repo.TryBootstrapLock(ctx)
 	if err != nil {
 		return err
 	}
-	restarts := 0
+	if !acquired {
+		return fmt.Errorf("bootstrap en ejecución")
+	}
+	defer func() {
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = lock.Release(releaseCtx)
+	}()
+	state, err := useCase.repo.BeginOrResume(ctx, forceNew...)
+	if errors.Is(err, subject.ErrBootstrapCompleted) {
+		return nil
+	}
+	if errors.Is(err, subject.ErrBootstrapExpired) {
+		return ErrSnapshotRevisionExpired
+	}
+	if err != nil {
+		return err
+	}
 	for {
 		page, fetchErr := useCase.source.FetchPage(ctx, state.Cursor, state.SourceRevision, useCase.pageSize)
 		if errors.Is(fetchErr, ErrSnapshotRevisionExpired) {
-			if restarts >= 2 {
-				_ = useCase.repo.Fail(ctx, state, fetchErr.Error())
-				return fetchErr
-			}
-			state, err = useCase.repo.RestartExpired(ctx, state)
-			if err != nil {
-				return err
-			}
-			restarts++
-			continue
+			_ = useCase.repo.Fail(ctx, state, "snapshot_revision_expired")
+			return fetchErr
 		}
 		if fetchErr != nil {
 			_ = useCase.repo.Fail(ctx, state, fetchErr.Error())

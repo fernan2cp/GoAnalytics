@@ -493,12 +493,12 @@ La evidencia de agosto es histórica. Estas tareas reabren la certificación del
 
 ### TASK-CA-0503 — Alinear Bootstrap Y Recuperación
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Requisitos:** `REQ-CA-028`, `REQ-CA-029`, `REQ-CA-030`, `REQ-CA-031`.
 - **Criterios:** `AC-CA-012`, `AC-CA-013`.
 - **Dependencias:** `TASK-CA-0502`.
 - **Acciones:** implementar `--force-new-snapshot`, reanudación de errores recuperables, expiración explícita y exclusión de procesos concurrentes.
-- **Evidencia:** pendiente.
+- **Evidencia:** suite completa worker y vet aprobados con `POSTGRES_INTEGRATION_DSN` y `REDIS_INTEGRATION_ADDR` aislados. `TestBootstrapIntegrationResumesFailureAndRequiresExplicitNewSnapshot` verifica lock exclusivo, reanudación del mismo ID/cursor después de error, expiración sin reinicio automático, corte nuevo explícito y no-op tras completar. La CLI implementa el flag y lo restringe al modo bootstrap.
 
 ### TASK-CA-0504 — Asegurar Snapshot Lifecycle De La Fuente
 

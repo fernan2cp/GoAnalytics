@@ -43,7 +43,7 @@ El proyecto principal debe aplicar después disponibilidad, permisos, restriccio
 El módulo worker incorpora un puerto `SubjectSnapshotResolver` y adaptador HTTP con:
 
 ```env
-SUBJECT_SOURCE_URL=http://backend/internal/analytics/subjects/snapshot
+SUBJECT_SNAPSHOT_URL=http://backend/api/v1/internal/analytics/subjects/snapshot
 SUBJECT_SOURCE_TOKEN=change_me
 SUBJECT_SOURCE_TIMEOUT_MS=2000
 SUBJECT_BOOTSTRAP_PAGE_SIZE=500

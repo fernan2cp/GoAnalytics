@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/domain/subject"
 )
 
@@ -31,8 +32,18 @@ type bootstrapRepoFake struct {
 	applyErr  error
 }
 
-func (fake *bootstrapRepoFake) BeginOrResume(context.Context) (subject.BootstrapState, error) {
+func (fake *bootstrapRepoFake) BeginOrResume(_ context.Context, force ...bool) (subject.BootstrapState, error) {
+	if len(force) > 0 && force[0] {
+		fake.restarted++
+	}
 	return fake.state, nil
+}
+
+type bootstrapLockFake struct{}
+
+func (bootstrapLockFake) Release(context.Context) error { return nil }
+func (fake *bootstrapRepoFake) TryBootstrapLock(context.Context) (outbound.ProjectionLock, bool, error) {
+	return bootstrapLockFake{}, true, nil
 }
 func (fake *bootstrapRepoFake) ApplyPage(_ context.Context, state subject.BootstrapState, page subject.SnapshotPage) (subject.BootstrapState, error) {
 	fake.applied++
@@ -76,24 +87,24 @@ func TestBootstrapSubjectsResumesUntilLastPage(t *testing.T) {
 	}
 }
 
-func TestBootstrapSubjectsRestartsExpiredRevision(t *testing.T) {
+func TestBootstrapSubjectsRequiresExplicitRestartAfterExpiration(t *testing.T) {
 	source := &snapshotSourceFake{errors: []error{ErrSnapshotRevisionExpired, nil}, pages: []subject.SnapshotPage{{}, {SourceRevision: "r2", HasMore: false}}}
 	repo := &bootstrapRepoFake{state: subject.BootstrapState{ID: 1, Cursor: "old", SourceRevision: "r1"}}
 	useCase, _ := NewBootstrapSubjects(source, repo, nil, 100)
-	if err := useCase.Run(context.Background()); err != nil {
+	if err := useCase.Run(context.Background()); !errors.Is(err, ErrSnapshotRevisionExpired) {
 		t.Fatal(err)
 	}
-	if repo.restarted != 1 || repo.applied != 1 {
+	if repo.restarted != 0 || repo.applied != 0 || repo.failed != "snapshot_revision_expired" {
 		t.Fatalf("restarted=%d applied=%d", repo.restarted, repo.applied)
 	}
 }
 
-func TestBootstrapSubjectsFailsAfterRepeatedExpiration(t *testing.T) {
-	source := &snapshotSourceFake{errors: []error{ErrSnapshotRevisionExpired, ErrSnapshotRevisionExpired, ErrSnapshotRevisionExpired}}
+func TestBootstrapSubjectsSupportsExplicitNewSnapshot(t *testing.T) {
+	source := &snapshotSourceFake{pages: []subject.SnapshotPage{{SourceRevision: "new"}}}
 	repo := &bootstrapRepoFake{state: subject.BootstrapState{ID: 1}}
 	useCase, _ := NewBootstrapSubjects(source, repo, nil, 100)
-	err := useCase.Run(context.Background())
-	if !errors.Is(err, ErrSnapshotRevisionExpired) || repo.restarted != 2 || repo.failed == "" {
+	err := useCase.Run(context.Background(), true)
+	if err != nil || repo.restarted != 1 || repo.applied != 1 {
 		t.Fatalf("err=%v restarted=%d failed=%q", err, repo.restarted, repo.failed)
 	}
 }

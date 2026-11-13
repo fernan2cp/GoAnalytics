@@ -16,14 +16,19 @@ import (
 
 func main() {
 	mode := flag.String("mode", "serve", "modo: serve, bootstrap, project-global, project-context, refresh-registry o resolve-initial-contexts")
+	forceNew := flag.Bool("force-new-snapshot", false, "iniciar un snapshot nuevo (solo modo bootstrap)")
 	flag.Parse()
-	if err := run(*mode); err != nil {
+	if err := run(*mode, *forceNew); err != nil {
 		fmt.Fprintf(os.Stderr, "subject-jobs: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(mode string) error {
+func run(mode string, forceNew ...bool) error {
+	force := len(forceNew) > 0 && forceNew[0]
+	if force && mode != "bootstrap" {
+		return fmt.Errorf("force-new-snapshot requiere modo bootstrap")
+	}
 	if mode != "bootstrap" && mode != "project-global" && mode != "project-context" && mode != "refresh-registry" && mode != "resolve-initial-contexts" && mode != "serve" {
 		return fmt.Errorf("modo no soportado: %s", mode)
 	}
@@ -43,7 +48,7 @@ func run(mode string) error {
 		if container.Bootstrap == nil {
 			return fmt.Errorf("bootstrap de sujetos deshabilitado")
 		}
-		return container.Bootstrap.Run(ctx)
+		return container.Bootstrap.Run(ctx, force)
 	case "project-global":
 		if container.ProjectGlobal == nil {
 			return fmt.Errorf("proyección global deshabilitada")

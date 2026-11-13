@@ -13,8 +13,8 @@ type SubjectSnapshotSource interface {
 
 // SubjectBootstrapRepository persiste progreso e identidades de forma atómica.
 type SubjectBootstrapRepository interface {
-	BeginOrResume(ctx context.Context) (subject.BootstrapState, error)
+	TryBootstrapLock(ctx context.Context) (ProjectionLock, bool, error)
+	BeginOrResume(ctx context.Context, forceNew ...bool) (subject.BootstrapState, error)
 	ApplyPage(ctx context.Context, state subject.BootstrapState, page subject.SnapshotPage) (subject.BootstrapState, error)
-	RestartExpired(ctx context.Context, state subject.BootstrapState) (subject.BootstrapState, error)
 	Fail(ctx context.Context, state subject.BootstrapState, cause string) error
 }
