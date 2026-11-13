@@ -484,12 +484,12 @@ La evidencia de agosto es histórica. Estas tareas reabren la certificación del
 
 ### TASK-CA-0502 — Refrescar Registro Revisionado
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Requisitos:** `REQ-CA-040`, `REQ-CA-044`, `REQ-CA-045`, `REQ-CA-046`.
 - **Criterios:** `AC-CA-017`, `AC-CA-018`.
 - **Dependencias:** `TASK-CA-0501`.
 - **Acciones:** implementar refresh explícito y vencimiento de memoria con fallback a la última revisión válida; probar cambio de revisión y fuente inválida.
-- **Evidencia:** pendiente.
+- **Evidencia:** suite completa worker y `go vet ./...` aprobados con Redis aislado `127.0.0.1:16389`. Refresh omite cachés, memoria vence y los fallos conservan revisión válida. La caché v2 preserva IDs técnicos y checksum, probados contra Redis real. Publicación serializada, versiones crecientes y padre inmutable se recertifican con PostgreSQL en `TASK-CA-0506`.
 
 ### TASK-CA-0503 — Alinear Bootstrap Y Recuperación
 

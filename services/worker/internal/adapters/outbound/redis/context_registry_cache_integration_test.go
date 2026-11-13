@@ -19,12 +19,12 @@ func TestContextRegistryCacheIntegrationTokenizedLock(t *testing.T) {
 	defer client.Close()
 	defer client.Del(ctx, registryCacheKey, registryLockKey)
 	cache := NewContextRegistryCache(client, time.Minute, 30*time.Second)
-	registry := subject.ContextRegistry{SchemaVersion: 1, RegistryVersion: 1, RegistryRevision: "r1"}
+	registry := subject.ContextRegistry{ID: 9, SchemaVersion: 1, RegistryVersion: 1, RegistryRevision: "r1", Contexts: []subject.ContextDefinition{{ID: 7, ContextKey: "search", ContextVersion: 1, ContextFamily: "search", Status: "active"}}}
 	if err := cache.Save(ctx, registry); err != nil {
 		t.Fatal(err)
 	}
 	loaded, ok, err := cache.Load(ctx)
-	if err != nil || !ok || loaded.RegistryRevision != "r1" {
+	if err != nil || !ok || loaded.RegistryRevision != "r1" || loaded.ID != 9 || loaded.Contexts[0].ID != 7 || loaded.PayloadChecksum == "" {
 		t.Fatalf("loaded=%#v ok=%v err=%v", loaded, ok, err)
 	}
 	token, acquired, err := cache.TryAcquire(ctx)

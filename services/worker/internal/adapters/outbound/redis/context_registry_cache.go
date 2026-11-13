@@ -11,13 +11,20 @@ import (
 	"goanalytics/services/worker/internal/domain/subject"
 )
 
-const registryCacheKey = "goanalytics:subject-context-registry:active"
+const registryCacheKey = "goanalytics:subject-context-registry:active:v2"
 const registryLockKey = "goanalytics:subject-context-registry:rehydrate-lock"
 
 // ContextRegistryCache implementa caché y lock tokenizado en Redis.
 type ContextRegistryCache struct {
 	client       *goredis.Client
 	ttl, lockTTL time.Duration
+}
+
+// registryCachePayload conserva IDs técnicos exclusivamente en la caché interna.
+type registryCachePayload struct {
+	Registry      subject.ContextRegistry `json:"registry"`
+	RevisionID    int64                   `json:"revision_id"`
+	DefinitionIDs []int64                 `json:"definition_ids"`
 }
 
 // NewContextRegistryCache crea el adaptador Redis.
@@ -32,14 +39,32 @@ func (cache *ContextRegistryCache) Load(ctx context.Context) (subject.ContextReg
 	if err != nil {
 		return subject.ContextRegistry{}, false, err
 	}
-	var registry subject.ContextRegistry
-	if err = json.Unmarshal(value, &registry); err != nil {
+	var payload registryCachePayload
+	if err = json.Unmarshal(value, &payload); err != nil {
+		return subject.ContextRegistry{}, false, err
+	}
+	registry := payload.Registry
+	if payload.RevisionID <= 0 || len(payload.DefinitionIDs) != len(registry.Contexts) {
+		return registry, false, nil
+	}
+	registry.ID = payload.RevisionID
+	for index := range registry.Contexts {
+		if payload.DefinitionIDs[index] <= 0 {
+			return registry, false, nil
+		}
+		registry.Contexts[index].ID = payload.DefinitionIDs[index]
+	}
+	if err = registry.Validate(); err != nil {
 		return registry, false, err
 	}
 	return registry, true, nil
 }
 func (cache *ContextRegistryCache) Save(ctx context.Context, registry subject.ContextRegistry) error {
-	payload, err := json.Marshal(registry)
+	ids := make([]int64, len(registry.Contexts))
+	for index := range registry.Contexts {
+		ids[index] = registry.Contexts[index].ID
+	}
+	payload, err := json.Marshal(registryCachePayload{Registry: registry, RevisionID: registry.ID, DefinitionIDs: ids})
 	if err != nil {
 		return err
 	}

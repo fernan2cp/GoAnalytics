@@ -58,7 +58,7 @@ func run(mode string) error {
 		if container.Registry == nil {
 			return fmt.Errorf("registro de contextos deshabilitado")
 		}
-		_, err := container.Registry.Active(ctx)
+		_, err := container.Registry.Refresh(ctx)
 		return err
 	case "resolve-initial-contexts":
 		if container.ResolveInitial == nil {

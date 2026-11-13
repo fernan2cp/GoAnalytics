@@ -6,6 +6,7 @@ import (
 	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/subject"
 	"testing"
+	"time"
 )
 
 type registryCacheFake struct {
@@ -115,5 +116,39 @@ func TestContextRegistryLoaderKeepsLastValidOnInvalidSource(t *testing.T) {
 	value, err := loader.Active(context.Background())
 	if err != nil || value.RegistryRevision != "r1" || repo.invalid != 1 || !lock.released {
 		t.Fatalf("value=%#v err=%v repo=%#v lock=%#v", value, err, repo, lock)
+	}
+}
+
+func TestRegistryRefreshReplacesWarmMemoryAndExpires(t *testing.T) {
+	initial := validRegistry()
+	newer := validRegistry()
+	newer.RegistryVersion = 2
+	newer.RegistryRevision = "r2"
+	source := &registrySourceFake{value: newer}
+	repo := &registryRepoFake{active: initial, ok: true}
+	loader := NewContextRegistryLoader(&registryCacheFake{}, &registryLockFake{acquired: true}, repo, source)
+	if _, err := loader.Active(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	value, err := loader.Refresh(context.Background())
+	if err != nil || value.RegistryRevision != "r2" || repo.persisted != 1 {
+		t.Fatalf("value=%#v err=%v", value, err)
+	}
+	newer.RegistryRevision = "r3"
+	newer.RegistryVersion = 3
+	source.value = newer
+	loader.expiresAt = time.Now().Add(-time.Second)
+	value, err = loader.Active(context.Background())
+	if err != nil || value.RegistryRevision != "r3" {
+		t.Fatalf("value=%#v err=%v", value, err)
+	}
+}
+
+func TestRegistryRefreshPreservesValidRevisionOnSourceFailure(t *testing.T) {
+	initial := validRegistry()
+	loader := NewContextRegistryLoader(&registryCacheFake{}, &registryLockFake{acquired: true}, &registryRepoFake{active: initial, ok: true}, &registrySourceFake{err: errors.New("fuente caída")})
+	value, err := loader.Refresh(context.Background())
+	if err != nil || value.RegistryRevision != "r1" {
+		t.Fatalf("value=%#v err=%v", value, err)
 	}
 }

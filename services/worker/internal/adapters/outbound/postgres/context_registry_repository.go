@@ -73,6 +73,19 @@ func (repository *ContextRegistryRepository) PersistValid(ctx context.Context, r
 		return registry, err
 	}
 	defer tx.Rollback(ctx)
+	// Serializa publicaciones y evita activar una revisión anterior a la vigente.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('subject_registry_publish',0))`); err != nil {
+		return registry, err
+	}
+	var activeVersion int64
+	var activeRevision string
+	err = tx.QueryRow(ctx, `SELECT registry_version,registry_revision FROM analytics_context_registry_revisions WHERE validation_status='valid' AND activated_at IS NOT NULL`).Scan(&activeVersion, &activeRevision)
+	if err != nil && err != pgx.ErrNoRows {
+		return registry, err
+	}
+	if err == nil && registry.RegistryRevision != activeRevision && registry.RegistryVersion <= activeVersion {
+		return registry, fmt.Errorf("la versión del registro debe avanzar")
+	}
 	var existingChecksum string
 	var revisionID int64
 	err = tx.QueryRow(ctx, `SELECT id,payload_checksum FROM analytics_context_registry_revisions WHERE registry_revision=$1`, registry.RegistryRevision).Scan(&revisionID, &existingChecksum)
@@ -89,10 +102,12 @@ func (repository *ContextRegistryRepository) PersistValid(ctx context.Context, r
 		}
 	}
 	definitionIDs := map[string]int64{}
+	created := map[int64]bool{}
 	for _, definition := range registry.Contexts {
 		var id int64
 		var family string
-		err = tx.QueryRow(ctx, `INSERT INTO analytics_context_definitions(context_key,context_version,context_family) VALUES($1,$2,$3) ON CONFLICT(context_key,context_version) DO UPDATE SET context_key=EXCLUDED.context_key RETURNING id,context_family`, definition.ContextKey, definition.ContextVersion, definition.ContextFamily).Scan(&id, &family)
+		var inserted bool
+		err = tx.QueryRow(ctx, `INSERT INTO analytics_context_definitions(context_key,context_version,context_family) VALUES($1,$2,$3) ON CONFLICT(context_key,context_version) DO UPDATE SET context_key=EXCLUDED.context_key RETURNING id,context_family,(xmax=0)`, definition.ContextKey, definition.ContextVersion, definition.ContextFamily).Scan(&id, &family, &inserted)
 		if err != nil {
 			return registry, err
 		}
@@ -100,6 +115,7 @@ func (repository *ContextRegistryRepository) PersistValid(ctx context.Context, r
 			return registry, fmt.Errorf("definición publicada inmutable")
 		}
 		definitionIDs[fmt.Sprintf("%s\x00%d", definition.ContextKey, definition.ContextVersion)] = id
+		created[id] = inserted
 	}
 	for _, definition := range registry.Contexts {
 		id := definitionIDs[fmt.Sprintf("%s\x00%d", definition.ContextKey, definition.ContextVersion)]
@@ -118,6 +134,9 @@ func (repository *ContextRegistryRepository) PersistValid(ctx context.Context, r
 			return registry, fmt.Errorf("padre publicado inmutable")
 		}
 		if current == nil && parent != nil {
+			if !created[id] {
+				return registry, fmt.Errorf("padre publicado inmutable")
+			}
 			if _, err = tx.Exec(ctx, `UPDATE analytics_context_definitions SET parent_definition_id=$2 WHERE id=$1`, id, parent); err != nil {
 				return registry, err
 			}
