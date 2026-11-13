@@ -97,7 +97,7 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 			return nil, sourceErr
 		}
 		container.Redis = redisClient
-		container.Registry = usecases.NewContextRegistryLoader(cache, cache, repository, source)
+		container.Registry = usecases.NewContextRegistryLoader(cache, cache, repository, source).WithMetrics(metrics)
 		if config.SubjectProjectionEnabled {
 			projectionRepository, projectionErr := postgresadapter.NewProjectionRepository(pool)
 			if projectionErr != nil {
@@ -105,7 +105,7 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 				_ = redisClient.Close()
 				return nil, projectionErr
 			}
-			container.ProjectContext, err = usecases.NewProjectContext(projectionRepository, config.SubjectProjectionVersion, config.SubjectProjectionBatchSize)
+			container.ProjectContext, err = usecases.NewProjectContext(projectionRepository, config.SubjectProjectionVersion, config.SubjectProjectionBatchSize, metrics)
 			if err != nil {
 				pool.Close()
 				_ = redisClient.Close()

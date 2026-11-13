@@ -30,7 +30,7 @@ Agregar una familia requiere cambio de contrato, pruebas y despliegue coordinado
 - Padre existente por clave y versión.
 - Cero o un padre.
 - Sin ciclos.
-- Padre e hijo de la misma familia en el MVP.
+- Jerarquía independiente de familia: conservar las relaciones del catálogo publicado, incluidas familias distintas. No hay roll-up ni fallback jerárquico en el MVP; restringir familias ahora rompería las definiciones inmutables existentes.
 - Definición previamente publicada inmutable.
 - Misma revisión con payload distinto rechazada.
 
@@ -58,6 +58,8 @@ Una falla revierte todo. La última revisión válida continúa activa.
 4. Endpoint del proyecto principal.
 
 PostgreSQL es el fallback durable. Redis almacena revisión y payload validado con TTL de 86.400 segundos.
+
+La memoria vence al minuto. `subject-jobs --mode refresh-registry` consulta explícitamente la fuente incluso con caché caliente. La caché Redis v2 conserva IDs técnicos para FKs sin exponerlos en el contrato público. Publicaciones concurrentes se serializan; una revisión distinta exige `registry_version` mayor y un padre ya publicado no puede cambiar, tampoco desde NULL.
 
 ## Lock Distribuido
 
@@ -88,14 +90,14 @@ La resolución queda congelada para ese evento. Publicar otra revisión no reint
 Comando:
 
 ```powershell
-subject-jobs resolve-contexts --registry-revision <revision>
+subject-jobs --mode resolve-initial-contexts
 ```
 
-Procesa filas `registry_disabled`, `unregistered` o `family_unresolved` por `id`, en lotes de 5.000. Solo actualiza columnas derivadas de contexto y `updated_at`; no modifica `analytics_events`.
+Procesa filas sin revisión aplicada por `id`, en lotes de 5.000. Solo actualiza columnas derivadas de contexto y `updated_at`; no modifica `analytics_events` ni reinterpreta detalles con revisión histórica aplicada.
 
 El comando es idempotente y reanudable mediante checkpoint propio. Al completarse, se ejecuta `project-context` para materializar los días afectados.
 
-No implementa conciliación continua. Una revisión futura que registre un contexto previamente desconocido requerirá ejecución manual hasta la Fase 5.
+No implementa conciliación continua. Registrar posteriormente un contexto desconocido ya revisionado requiere la conciliación de Fase 5; no se debe usar el job inicial para reescribir esa historia.
 
 ## Revisión Inválida
 

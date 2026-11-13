@@ -32,6 +32,9 @@ type ProjectionScheduler struct {
 }
 
 // NewProjectionScheduler crea el scheduler diario.
+// Recibe repositorio, ejecutor, versión, intervalos positivos y nombres a evaluar
+// (global por defecto). Devuelve una instancia sin I/O; las fallas operativas se
+// conservan en Status durante Serve.
 func NewProjectionScheduler(repository outbound.GlobalProjectionRepository, runner ProjectionRunner, version int, interval, checkInterval time.Duration, names ...string) *ProjectionScheduler {
 	if len(names) == 0 {
 		names = []string{globalProjectionName}

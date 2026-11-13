@@ -442,7 +442,7 @@ La preparación operativa puede avanzar en paralelo después de `TASK-CA-0003`, 
 - **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-064`, `REQ-CA-066`.
-- **Criterios:** respaldo byte a byte verificable y restauración documentada.
+- **Criterios:** `AC-CA-028`; respaldo byte a byte verificable y restauración documentada.
 - **Dependencias:** ninguna; debe ejecutarse antes de editar `docker-compose-devel.yml`.
 - **Acciones:**
   1. Copiar el compose sin transformaciones a un directorio temporal fuera del repositorio.
@@ -456,7 +456,7 @@ La preparación operativa puede avanzar en paralelo después de `TASK-CA-0003`, 
 - **Estado:** `done`
 - **Responsable:** GoAnalytics.
 - **Requisitos:** `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
-- **Criterios:** configuración reproducible, smoke tests, rollback y checklist sin secretos versionados.
+- **Criterios:** `AC-CA-027`, `AC-CA-028`; configuración reproducible, smoke tests, rollback y checklist sin secretos versionados.
 - **Dependencias:** `TASK-CA-CFG-0001` y configuración de desarrollo.
 - **Acciones:**
   1. Documentar variables de ambos proyectos y los cuatro tokens dedicados.
@@ -465,9 +465,9 @@ La preparación operativa puede avanzar en paralelo después de `TASK-CA-0003`, 
   4. Documentar rollback por flags y detención de binarios.
 - **Evidencia:** instructivo versionado en `docs/next_implementation/customers_analytics/instructivo_configuracion_mvp_produccion.md`; no contiene secretos reales y cubre prerrequisitos, variables, smoke tests, SQL de verificación, rollback y checklist de liberación.
 
-## 9. Hallazgo Abierto De Integración
+## 9. Hallazgo De Integración — Resuelto
 
-La configuración quedó aplicada y los procesos están saludables, pero la primera asociación server-to-server no se normaliza todavía: DragonFullAV omite `token_version`, GoAnalytics envía `0` al resolver y DragonFullAV responde `422`. El evento termina como `site_unresolved`. La corrección debe realizarse en el contrato de código —enviar versión `1` para server o aceptar ausencia/cero como versión server— y cubrirse con pruebas antes de activar producción.
+El hallazgo histórico era una resolución server con `token_version=0`, rechazada con `422`. `TASK-CA-0501` lo corrigió en el worker sin ampliar el payload HTTP interno. La certificación `TASK-CA-0506` verifica asociación y lifecycle hasta persistencia e hidratación, además de separar el cooldown server del web.
 
 ## 10. Correcciones De Cierre — 2026-11-13
 
@@ -520,9 +520,9 @@ La evidencia de agosto es histórica. Estas tareas reabren la certificación del
 
 ### TASK-CA-0506 — Recertificar Recorrido Cruzado Y Operación
 
-- **Estado:** `pending`
-- **Requisitos:** `REQ-CA-001`, `REQ-CA-011`, `REQ-CA-060`, `REQ-CA-065`, `REQ-CA-066`.
-- **Criterios:** `AC-CA-001`, `AC-CA-025`, `AC-CA-026`, `AC-CA-028`, `AC-CA-029`, `AC-CA-030`.
+- **Estado:** `done`
+- **Requisitos:** `REQ-CA-001`, `REQ-CA-011`, `REQ-CA-060`, `REQ-CA-064`, `REQ-CA-065`, `REQ-CA-066`.
+- **Criterios:** `AC-CA-001`, `AC-CA-025`, `AC-CA-026`, `AC-CA-027`, `AC-CA-028`, `AC-CA-029`, `AC-CA-030`.
 - **Dependencias:** `TASK-CA-0505`.
 - **Acciones:** verificar emisión real, HTTP, stream, resolver, normalización, proyección e hidratación en infraestructura aislada; actualizar instructivo y evidencias sin secretos ni datos sintéticos en las bases de negocio.
-- **Evidencia:** pendiente.
+- **Evidencia:** el 2026-11-13 `scripts/certify_subject_mvp.py` aprobó el recorrido con binarios reales y bordes del proyecto principal, usando PostgreSQL/Redis temporales. Verificó migraciones `001→008→004→vacío` con evento legacy, bootstrap no-op, emisión → Redis → resolver → normalización → ranking contextual → hidratación SQL, lifecycle post-commit, aislamiento, idempotencia, métricas efectivas y persistencia web después de apagar todos los flags de sujetos. El registry se probó con migraciones reales, revisión creciente y padre inmutable. Suite worker con integraciones y vet, ingest con vet y SDK 16/16 aprobados. DragonFullAV: 26 pruebas analytics aprobadas; commits `d39389878`, `d3b998103`, `898f613f7` y `aa00fffa5` registran fuente persistida, borde aislado, captura SQL apagada por defecto e IDs de evento aislados por site. Perfil distribuido de 20 tenants/100.000 sujetos/500.000 eventos: backfill 59,732 s; proyecciones 4m20,496s; endpoint HTTP p95 23,785 ms para limit 10 (200 consultas global/contexto). Imágenes jobs/query construidas; diff, arquitectura y UTF-8 verificados. El instructivo documenta migración `custanalytics01`, activación de captura por tenant, comandos reales y rollback. No se desplegó sobre bases de negocio.

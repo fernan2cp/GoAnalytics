@@ -2,7 +2,7 @@
 
 ## 1. Estado Del Paquete
 
-El tablero conserva la certificación histórica de agosto. La auditoría del 2026-11-13 reabrió el cierre: las tareas `TASK-CA-0501` a `TASK-CA-0506` del plan vigente prevalecen sobre los estados históricos. El MVP no está aprobado para rollout hasta completar esa recertificación.
+Al 2026-11-13 se completaron las 36 tareas (28 originales, dos de configuración y seis de corrección/recertificación). La sección 8 contiene la evidencia vigente y prevalece sobre las mediciones históricas de agosto. El MVP queda aceptado para rollout progresivo; las migraciones y activación de tenants de negocio son un paso operativo posterior, no ejecutado por esta certificación.
 
 Estados permitidos:
 
@@ -112,8 +112,35 @@ No se debe inferir avance por la sola existencia de código: sin evidencia repro
 | Configuración | `TASK-CA-CFG-0001` | Backup previo del compose de GoAnalytics | GoAnalytics | `done` | Backup byte a byte fuera del repositorio; 3.346 bytes y SHA-256 `0AAAC09AA127203C787F4901BD807C92CFE50FAEA38D1C4F8F930450A273BA8F` verificados antes de editar el compose |
 | Configuración | `TASK-CA-CFG-0002` | Instructivo resumido para producción | GoAnalytics | `done` | `docs/next_implementation/customers_analytics/instructivo_configuracion_mvp_produccion.md` versionado; variables, procesos, smoke tests, rollback y checklist documentados sin secretos |
 
-## 7. Bloqueo Técnico Para La Activación De Asociaciones
+## 7. Bloqueo Técnico Histórico — Resuelto
 
 | Hallazgo | Estado | Evidencia | Acción requerida |
 |---|---|---|---|
-| El emisor server no envía `token_version`; el resolver recibe `0` y responde `422` | `pending` | En desarrollo, el evento interno obtuvo `202`, pero GoAnalytics persistió `site_unresolved`; el endpoint de resolución acepta la misma solicitud con `token_version=1` | Corregir el contrato en DragonFullAV o GoAnalytics y agregar prueba de asociación y lifecycle antes de liberar producción |
+| El perfil server enviaba `token_version=0` al resolver | `done` | `TASK-CA-0501` normaliza la resolución a versión 1; `TASK-CA-0506` certifica asociación y lifecycle cruzados | Desplegar los commits corregidos y seguir el instructivo antes de activar tenants |
+
+## 8. Recertificación Vigente — 2026-11-13
+
+| Tarea | Estado | Evidencia |
+|---|---|---|
+| `TASK-CA-0501` | `done` | `2dcef46`: contrato server corregido sin ampliar el endpoint interno |
+| `TASK-CA-0502` | `done` | `683b0bf`: refresh real, memoria con TTL y caché con IDs; PostgreSQL verifica inmutabilidad y revisión creciente |
+| `TASK-CA-0503` | `done` | `b25a8c0`: lock de importación, reanudación, expiración explícita y `--force-new-snapshot` |
+| `TASK-CA-0504` | `done` | GoAnalytics `ea4518d`; DragonFullAV `d39389878` y `898f613f7`: versión lifecycle persistida y captura SQL opt-in |
+| `TASK-CA-0505` | `done` | `e12e97a`: recuperación de proyección contextual y frescura de la fuente servida |
+| `TASK-CA-0506` | `done` | E2E reproducible, regresión, carga HTTP distribuida, métricas, artefactos y rollback; DragonFullAV `d3b998103`, `aa00fffa5` |
+
+| Dato | Resultado actual |
+|---|---|
+| Entorno | Windows amd64, Go 1.26.2; Docker Desktop; PostgreSQL 18.6, Redis 7.4.7 locales aislados |
+| Regresión | Ingest y worker con vet; worker con PostgreSQL/Redis; SDK 16/16; DragonFullAV analytics 26/26 |
+| Recorrido cruzado | Emisor y bordes reales; metadata de sites de fixture; SQL fuente y binarios Go reales, sin detalles normalizados precargados |
+| Migraciones | GoAnalytics 001→008 desde vacío y sobre 004 con legacy; down hasta vacío. Fuente custanalytics01 up/down en schema aislado |
+| Perfil | 20 tenants, 100.000 clientes, 500.000 asociaciones repartidas; totales de agregados comprobados |
+| Backfill | 59,732 s; objetivo ≤60 min |
+| Proyección global + contextual | 4m20,496s; objetivo ≤30 min |
+| API HTTP p95 | 23,785 ms, limit 10, 200 consultas; incluye Bearer, SQL y serialización; objetivo ≤300 ms |
+| Rollback | Todos los flags de sujetos apagados, endpoint interno 404 y evento web persistido; tablas conservadas |
+| Operación | Instructivo versionado; captura lifecycle SQL apagada por defecto; activación explícita por tenant y flags de aplicación |
+| Limitación operativa | Snapshot en memoria: una instancia/afinidad durante paginación; sin outbox ni conciliación general, según alcance MVP |
+
+Comandos reproducibles en `11_plan_pruebas.md`. El E2E elimina únicamente su base efímera y limpia su Redis dedicado. Los números de carga describen este entorno local y no sustituyen la observación del rollout en producción.

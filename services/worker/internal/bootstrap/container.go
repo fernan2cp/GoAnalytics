@@ -105,7 +105,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		if registryErr != nil {
 			return nil, registryErr
 		}
-		contextRegistry = usecases.NewContextRegistryLoader(registryCache, registryCache, registryRepository, registrySource)
+		contextRegistry = usecases.NewContextRegistryLoader(registryCache, registryCache, registryRepository, registrySource).WithMetrics(metricsRegistry)
 	}
 	process := usecases.NewProcessEventsUseCaseWithFeatures(
 		nil,

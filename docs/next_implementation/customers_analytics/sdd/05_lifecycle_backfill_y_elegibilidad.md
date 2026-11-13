@@ -20,6 +20,8 @@ AND incoming.source_mutation_id > current.source_mutation_id
 
 La comparación del desempate es binaria y lexicográfica sobre UTF-8. El proyecto principal debe generar un ID estable para la misma mutación. `effective_at` describe cuándo tuvo efecto en negocio, pero no ordena actualizaciones.
 
+DragonFullAV persiste esa tupla en `analytics_customer_lifecycle` (revisión tenant `custanalytics01`). Captura SQL opt-in mediante `analytics_customer_lifecycle_configure(true)`, apagada por defecto. La misma fila alimenta snapshot y emisión post-commit; leer un snapshot no crea una versión nueva. Altas, bajas y conversiones actualizan elegibilidad en la transacción de negocio. Una fusión debe escribir estado/destino en ese registro dentro de su transacción; el trigger asigna la nueva tupla. El MVP no agrega un flujo de negocio de fusión inexistente.
+
 Un evento igual o anterior produce `lifecycle_ignored`, log informativo y no cambia el sujeto.
 
 ## Transiciones
@@ -45,7 +47,7 @@ El módulo worker incorpora un puerto `SubjectSnapshotResolver` y adaptador HTTP
 ```env
 SUBJECT_SNAPSHOT_URL=http://backend/api/v1/internal/analytics/subjects/snapshot
 SUBJECT_SOURCE_TOKEN=change_me
-SUBJECT_SOURCE_TIMEOUT_MS=2000
+SUBJECT_SNAPSHOT_TIMEOUT_MS=5000
 SUBJECT_BOOTSTRAP_PAGE_SIZE=500
 ```
 
@@ -56,7 +58,8 @@ El adaptador valida status HTTP, forma JSON, `source_revision`, cursor y ausenci
 Comando conceptual:
 
 ```powershell
-subject-jobs bootstrap --subject-type customer
+subject-jobs --mode bootstrap
+subject-jobs --mode bootstrap --force-new-snapshot
 ```
 
 Algoritmo:

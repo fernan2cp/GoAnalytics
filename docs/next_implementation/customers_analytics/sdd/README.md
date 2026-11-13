@@ -31,9 +31,9 @@ Las decisiones cerradas en este SDD prevalecen para el MVP cuando la guía todav
 - [`10_observabilidad_operacion_y_alertas.md`](10_observabilidad_operacion_y_alertas.md): métricas, logs, health checks y runbooks.
 - [`11_plan_pruebas.md`](11_plan_pruebas.md): escenarios y comandos de validación.
 - [`12_rollout_y_rollback.md`](12_rollout_y_rollback.md): activación progresiva y reversión segura.
-- [`13_plan_de_tareas.md`](13_plan_de_tareas.md): tareas pendientes de las Fases 0 a 4.
+- [`13_plan_de_tareas.md`](13_plan_de_tareas.md): tareas de las Fases 0 a 4 y correcciones de cierre `TASK-CA-0501` a `TASK-CA-0506`.
 - [`14_criterios_de_aceptacion.md`](14_criterios_de_aceptacion.md): condiciones verificables de salida.
-- [`15_estado_implementacion.md`](15_estado_implementacion.md): tablero inicial de avance.
+- [`15_estado_implementacion.md`](15_estado_implementacion.md): estado actual y evidencia de certificación, distinguiendo el historial de agosto de la recertificación de noviembre.
 
 ## Regla De Trazabilidad
 
@@ -69,6 +69,6 @@ Cada tarea referencia al menos un requisito y un criterio. Cada requisito aparec
 - Scopes multiproyecto, UI administrativa o acceso directo a tablas.
 - Outbox durable en el proyecto principal.
 
-## Estado Inicial
+## Estado Y Validación
 
-El paquete es un plan. Todas las tareas nuevas comienzan en `pending`. El código existente solo se registra como baseline y no se considera evidencia de implementación del MVP.
+Las tareas nuevas comienzan en `pending`; solo la evidencia aceptada permite cerrarlas. El estado vigente, los commits de ambos repositorios y la certificación cruzada se registran en `15_estado_implementacion.md`. `11_plan_pruebas.md` contiene los comandos reproducibles. La preparación para producción está resumida en `../instructivo_configuracion_mvp_produccion.md`; certificar el MVP no equivale a desplegarlo ni activar tenants de negocio.

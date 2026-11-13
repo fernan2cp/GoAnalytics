@@ -3,12 +3,16 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"goanalytics/services/worker/internal/adapters/inbound/httpsuggestions"
 	"goanalytics/services/worker/internal/application/usecases"
 )
 
@@ -45,12 +49,12 @@ func TestSubjectMVPVolumeProfile(t *testing.T) {
 	if _, err = pool.Exec(ctx, mvpVolumeSchema); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = pool.Exec(ctx, `INSERT INTO analytics_subjects(id,tenant_id,external_subject_id) SELECT value,'tenant-'||lpad(((value-1)%20)::text,2,'0'),'customer-'||lpad(value::text,6,'0') FROM generate_series(1,100000) value; INSERT INTO analytics_event_subjects(tenant_id,analytics_subject_id,context_definition_id,local_date,timezone_name,event_name,event_time,updated_at,normalization_status,context_resolution_status) SELECT 'tenant-00',1,1,current_date,'UTC','subject_associated',now(),TIMESTAMPTZ '2026-08-11 12:00:00+00','normalized','registered' FROM generate_series(1,500000)`); err != nil {
+	if _, err = pool.Exec(ctx, `INSERT INTO analytics_subjects(id,tenant_id,external_subject_id) SELECT value,'tenant-'||lpad(((value-1)%20)::text,2,'0'),'customer-'||lpad(value::text,6,'0') FROM generate_series(1,100000) value; INSERT INTO analytics_event_subjects(tenant_id,analytics_subject_id,context_definition_id,local_date,timezone_name,event_name,event_time,updated_at,normalization_status,context_resolution_status) SELECT 'tenant-'||lpad(((value-1)%20)::text,2,'0'),((value-1)%100000)+1,1,current_date,'UTC','subject_associated',now(),TIMESTAMPTZ '2026-08-11 12:00:00+00','normalized','registered' FROM generate_series(1,500000) value`); err != nil {
 		t.Fatal(err)
 	}
 	repository, _ := NewProjectionRepository(pool)
-	global, _ := usecases.NewProjectGlobal(repository, nil, 1, 100000)
-	contextual, _ := usecases.NewProjectContext(repository, 1, 100000)
+	global, _ := usecases.NewProjectGlobal(repository, nil, 1, 500000)
+	contextual, _ := usecases.NewProjectContext(repository, 1, 500000)
 	projectionStarted := time.Now()
 	if err = global.Run(ctx); err != nil {
 		t.Fatal(err)
@@ -62,29 +66,44 @@ func TestSubjectMVPVolumeProfile(t *testing.T) {
 	if projectionDuration > 30*time.Minute {
 		t.Fatalf("proyección=%s", projectionDuration)
 	}
-	if _, err = pool.Exec(ctx, `INSERT INTO analytics_subject_tenant_daily SELECT tenant_id,id,current_date,'UTC',0,0,0,(id%20)+1,now(),1,now(),now(),now() FROM analytics_subjects ON CONFLICT DO NOTHING; INSERT INTO analytics_subject_context_daily SELECT tenant_id,id,1,current_date,'UTC',0,0,0,(id%20)+1,now(),1,now(),now(),now() FROM analytics_subjects ON CONFLICT DO NOTHING`); err != nil {
-		t.Fatal(err)
+	for _, table := range []string{"analytics_subject_tenant_daily", "analytics_subject_context_daily"} {
+		var rows, total, tenants int64
+		if err = pool.QueryRow(ctx, "SELECT count(*),sum(association_count),count(DISTINCT tenant_id) FROM "+table).Scan(&rows, &total, &tenants); err != nil {
+			t.Fatal(err)
+		}
+		if rows != 100000 || total != 500000 || tenants != 20 {
+			t.Fatalf("%s rows=%d total=%d tenants=%d", table, rows, total, tenants)
+		}
 	}
 	suggestions, _ := NewSuggestionRepository(pool)
+	query := usecases.NewQuerySuggestions(suggestions, 1, 90, 30, 48*time.Hour, true)
+	server := httptest.NewServer(httpsuggestions.NewHandler(true, "volume-token", 10, 100, query))
+	defer server.Close()
+	client := server.Client()
 	durations := make([]time.Duration, 0, 200)
 	for index := 0; index < 100; index++ {
-		started := time.Now()
-		if _, err = suggestions.GlobalSuggestions(ctx, "tenant-00", 1, 90, 10); err != nil {
-			t.Fatal(err)
+		for _, suffix := range []string{"", "&context_key=sales.customer_association&context_version=1"} {
+			started := time.Now()
+			request, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/internal/subjects/suggestions?tenant_id=tenant-00&subject_type=customer&limit=10"+suffix, nil)
+			request.Header.Set("Authorization", "Bearer volume-token")
+			response, requestErr := client.Do(request)
+			if requestErr != nil {
+				t.Fatal(requestErr)
+			}
+			_, readErr := io.Copy(io.Discard, response.Body)
+			response.Body.Close()
+			if readErr != nil || response.StatusCode != http.StatusOK {
+				t.Fatalf("status=%d err=%v", response.StatusCode, readErr)
+			}
+			durations = append(durations, time.Since(started))
 		}
-		durations = append(durations, time.Since(started))
-		started = time.Now()
-		if _, _, err = suggestions.ContextSuggestions(ctx, "tenant-00", "sales.customer_association", 1, 1, 30, 10); err != nil {
-			t.Fatal(err)
-		}
-		durations = append(durations, time.Since(started))
 	}
 	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 	p95 := durations[(len(durations)*95/100)-1]
 	if p95 > 300*time.Millisecond {
 		t.Fatalf("query p95=%s", p95)
 	}
-	t.Logf("profile tenants=20 subjects=100000 events=500000 projection=%s query_p95=%s", projectionDuration, p95)
+	t.Logf("profile tenants=20 subjects=100000 events=500000 projection=%s query_http_p95=%s", projectionDuration, p95)
 }
 
 const mvpVolumeSchema = `

@@ -35,8 +35,8 @@ func NewQueryAPIContainer(ctx context.Context, config Config) (*QueryAPIContaine
 		return nil, err
 	}
 	query := usecases.NewQuerySuggestions(repository, config.SubjectProjectionVersion, config.SubjectSuggestionGlobalDays, config.SubjectSuggestionContextDays, config.SubjectSuggestionStaleAfter, config.SubjectSuggestionServeStale)
-	suggestions := httpsuggestions.NewHandler(config.SubjectQueryAPIEnabled, config.SubjectQueryAPIToken, config.SubjectSuggestionDefaultLimit, config.SubjectSuggestionMaxLimit, query)
 	metrics := metricsadapter.NewRegistry()
+	suggestions := httpsuggestions.NewHandler(config.SubjectQueryAPIEnabled, config.SubjectQueryAPIToken, config.SubjectSuggestionDefaultLimit, config.SubjectSuggestionMaxLimit, query, metrics)
 	operations := httphealth.NewRouterWithMetrics(httphealth.NewHealthHandler(), httphealth.NewReadyHandler(pool.Ping), metrics.Handler())
 	mux := http.NewServeMux()
 	mux.Handle("/health", operations)

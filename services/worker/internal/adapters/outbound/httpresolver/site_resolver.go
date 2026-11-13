@@ -82,7 +82,13 @@ func (resolver *SiteResolver) Resolve(ctx context.Context, input outbound.Resolv
 		input.TokenVersion = 1
 	}
 	if resolver.gate != nil {
-		if err := resolver.gate.Allow(ctx, input.SiteCode); err != nil {
+		gateKey := input.SiteCode
+		// Server usa otra caché; su primera resolución no debe bloquear el
+		// calentamiento del perfil web ni cambiar su clave legacy de cooldown.
+		if input.Source == site.SourceServer {
+			gateKey += ":source:server"
+		}
+		if err := resolver.gate.Allow(ctx, gateKey); err != nil {
 			return site.SiteConfig{}, err
 		}
 	}

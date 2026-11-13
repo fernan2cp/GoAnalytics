@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"goanalytics/services/worker/internal/application/ports/outbound"
 	"goanalytics/services/worker/internal/application/usecases"
 )
 
@@ -18,21 +19,40 @@ type Handler struct {
 	token                  string
 	defaultLimit, maxLimit int
 	query                  *usecases.QuerySuggestions
+	metrics                outbound.Metrics
 }
 
 // NewHandler crea el adaptador HTTP interno.
-func NewHandler(enabled bool, token string, defaultLimit, maxLimit int, query *usecases.QuerySuggestions) *Handler {
-	return &Handler{enabled: enabled, token: token, defaultLimit: defaultLimit, maxLimit: maxLimit, query: query}
+// Recibe habilitación, Bearer, límites, consulta y métricas opcionales. Devuelve
+// el handler sin I/O; la configuración debe validarse antes en bootstrap.
+func NewHandler(enabled bool, token string, defaultLimit, maxLimit int, query *usecases.QuerySuggestions, metrics ...outbound.Metrics) *Handler {
+	handler := &Handler{enabled: enabled, token: token, defaultLimit: defaultLimit, maxLimit: maxLimit, query: query}
+	if len(metrics) > 0 {
+		handler.metrics = metrics[0]
+	}
+	return handler
 }
 
 // ServeHTTP autentica, valida query estricta y serializa resultados.
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	started := time.Now()
+	observed := &statusWriter{ResponseWriter: writer, status: http.StatusOK}
+	writer = observed
+	source := "none"
+	defer func() {
+		if handler.metrics != nil {
+			status := strconv.Itoa(observed.status)
+			handler.metrics.IncrementCounter("subject_query_requests_total", map[string]string{"status": status, "source_level": source})
+			handler.metrics.ObserveHistogram("subject_query_duration_seconds", time.Since(started).Seconds(), map[string]string{"status": status})
+		}
+	}()
 	if !handler.enabled {
 		writeError(writer, http.StatusNotFound, "not_found")
 		return
 	}
-	provided := strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
-	if len(provided) != len(handler.token) || subtle.ConstantTimeCompare([]byte(provided), []byte(handler.token)) != 1 {
+	authorization := request.Header.Get("Authorization")
+	provided := strings.TrimPrefix(authorization, "Bearer ")
+	if !strings.HasPrefix(authorization, "Bearer ") || len(provided) != len(handler.token) || subtle.ConstantTimeCompare([]byte(provided), []byte(handler.token)) != 1 {
 		writeError(writer, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -55,7 +75,26 @@ func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")
+	source = "global"
+	if level, ok := response.Context["source_level"].(string); ok {
+		source = level
+	}
+	if handler.metrics != nil && response.IsStale {
+		handler.metrics.IncrementCounter("subject_query_stale_total", nil)
+	}
 	_ = json.NewEncoder(writer).Encode(response)
+}
+
+// statusWriter conserva el estado HTTP para métricas sin incluir datos del cliente.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+// WriteHeader delega el estado y lo conserva para observar la petición.
+func (writer *statusWriter) WriteHeader(status int) {
+	writer.status = status
+	writer.ResponseWriter.WriteHeader(status)
 }
 
 func (handler *Handler) parseQuery(request *http.Request) (usecases.SuggestionQuery, string) {

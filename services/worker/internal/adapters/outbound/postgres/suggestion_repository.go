@@ -55,6 +55,23 @@ func (repository *SuggestionRepository) GlobalSuggestions(ctx context.Context, t
 	return results, rows.Err()
 }
 
+// ContextResolutionStatus distingue contexto desconocido de uno inactivo en la
+// revisión vigente. Recibe identidad publicada y devuelve estado o error SQL.
+func (repository *SuggestionRepository) ContextResolutionStatus(ctx context.Context, key string, version int) (string, error) {
+	var status string
+	err := repository.pool.QueryRow(ctx, `SELECT e.status FROM analytics_context_registry_revisions r JOIN analytics_context_registry_entries e ON e.registry_revision_id=r.id JOIN analytics_context_definitions d ON d.id=e.context_definition_id WHERE r.validation_status='valid' AND r.activated_at IS NOT NULL AND d.context_key=$1 AND d.context_version=$2`, key, version).Scan(&status)
+	if err == pgx.ErrNoRows {
+		return "unregistered", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if status == "inactive" {
+		return "inactive_context", nil
+	}
+	return "registered", nil
+}
+
 // ContextSuggestions devuelve ranking exacto si la definición está activa.
 func (repository *SuggestionRepository) ContextSuggestions(ctx context.Context, tenantID, contextKey string, contextVersion, projectionVersion, windowDays, limit int) ([]subject.Suggestion, bool, error) {
 	var definitionID int64

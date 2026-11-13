@@ -23,6 +23,8 @@ func NewSubjectBootstrapRepository(pool *pgxpool.Pool) (*SubjectBootstrapReposit
 }
 
 // BeginOrResume recupera la ejecución activa o crea una nueva.
+// Recibe contexto y solicitud opcional de corte nuevo; exige el lock de bootstrap.
+// Devuelve estado con checkpoint o errores de completado, expiración y PostgreSQL.
 func (repository *SubjectBootstrapRepository) BeginOrResume(ctx context.Context, forceNew ...bool) (subject.BootstrapState, error) {
 	var state subject.BootstrapState
 	var status, cause string

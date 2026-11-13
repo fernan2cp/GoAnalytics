@@ -1,5 +1,33 @@
 # Plan De Pruebas
 
+## Recertificación Reproducible — 2026-11-13
+
+Usar PostgreSQL y Redis exclusivos de pruebas. No reutilizar Redis DB 15 de una instalación real: el E2E exige que esté vacío y lo limpia al terminar. La herramienta crea una base `ca_cert_<uuid>` propia y elimina solo esa base, sin modificar la base administrativa indicada en el DSN. Requiere Python con las dependencias del backend y Go instalado.
+
+```powershell
+# Desde GoAnalytics, con credenciales del PostgreSQL local y aislado.
+$env:CA_CERT_POSTGRES_DSN='postgresql://analytics:<clave-pruebas>@127.0.0.1:15439/analytics'
+$env:CA_CERT_REDIS_ADDR='127.0.0.1:16389'
+python scripts/certify_subject_mvp.py --dragon-root C:/Proy_Python/dragonFullAV
+
+# Dentro de services/worker.
+$env:POSTGRES_INTEGRATION_DSN=$env:CA_CERT_POSTGRES_DSN
+$env:REDIS_INTEGRATION_ADDR=$env:CA_CERT_REDIS_ADDR
+go test ./... -count=1
+go vet ./...
+$env:SUBJECT_VOLUME_TEST='1'
+$env:SUBJECT_MVP_VOLUME_TEST='1'
+go test ./internal/adapters/outbound/postgres -run 'TestSubjectBootstrapVolume100k|TestSubjectMVPVolumeProfile' -v -count=1 -timeout 35m
+
+# Desde DragonFullAV: suite focal completa, fuente SQL y contrato del borde.
+$env:SUBJECT_SOURCE_INTEGRATION_DSN='postgresql+psycopg2://analytics:<clave-pruebas>@127.0.0.1:15439/analytics'
+python -m pytest tests/backend/services/analytics tests/backend/api/v1/internal/test_analytics.py -q --noconftest
+```
+
+El E2E arranca los binarios ingest, worker, subject-jobs y query-api. Usa los endpoints concretos del proyecto principal, el cargador SQL real y un emisor con operación sintética. Solo la metadata de sites se proporciona como fixture. Verifica asociación sin versión de tracking, autenticación, caché contextual, idempotencia, proyecciones, aislamiento, hidratación SQL y lifecycle post-commit. Apaga todos los flags de sujetos y comprueba que otro evento web se persista; verifica up/down de las ocho migraciones, tanto desde vacío como sobre `004` con datos legacy. También exige muestras reales de métricas de normalización, registro y consulta.
+
+El test de volumen distribuye 500.000 eventos entre 100.000 sujetos de 20 tenants, comprueba los totales de ambos agregados y mide el endpoint HTTP completo (Bearer, validación, SQL y serialización), sin precargar rankings artificiales. El tiempo de preparación del dataset se separa del tiempo de proyección.
+
 ## Comandos Base
 
 Desde la raíz:

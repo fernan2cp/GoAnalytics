@@ -13,6 +13,10 @@ import (
 
 type repositoryFake struct{}
 
+func (repositoryFake) ContextResolutionStatus(context.Context, string, int) (string, error) {
+	return "unregistered", nil
+}
+
 func (repositoryFake) ProjectionAvailability(context.Context, int, ...string) (subject.ProjectionAvailability, error) {
 	return subject.ProjectionAvailability{Available: true, ProjectionVersion: 1, ComputedAt: time.Now()}, nil
 }
@@ -37,5 +41,16 @@ func TestHandlerAuthenticatesAndValidatesStrictQuery(t *testing.T) {
 		if response.Code != test.status {
 			t.Fatalf("url=%s status=%d body=%s", test.url, response.Code, response.Body.String())
 		}
+	}
+}
+
+func TestHandlerRejectsTokenWithoutBearerScheme(t *testing.T) {
+	handler := NewHandler(true, "secret", 10, 100, nil)
+	request := httptest.NewRequest(http.MethodGet, "/v1/internal/subjects/suggestions?tenant_id=t&subject_type=customer", nil)
+	request.Header.Set("Authorization", "secret")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d", response.Code)
 	}
 }

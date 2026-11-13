@@ -201,11 +201,13 @@
 
 ## 8. Resultado Final
 
+Recertificado el 2026-11-13 en `TASK-CA-0501` a `TASK-CA-0506`. La evidencia vigente reemplaza el cierre anterior basado en pruebas parciales del recorrido. Los comandos y límites del entorno se encuentran en `11_plan_pruebas.md` y `15_estado_implementacion.md`.
+
 | Criterios | Estado | Evidencia principal |
 |---|---|---|
 | `AC-CA-001` a `AC-CA-011` | `passed` | regresión, Redis/PostgreSQL real, contratos internos, normalización y lifecycle |
 | `AC-CA-012` a `AC-CA-019` | `passed` | snapshot/backfill, migraciones, locks, watermarks, registro y resolución histórica |
 | `AC-CA-020` a `AC-CA-026` | `passed` | query API, aislamiento, ranking/fallback, emisión e hidratación DragonFullAV |
 | `AC-CA-027` y `AC-CA-028` | `passed` | métricas, health/readiness, alertas, flags, imágenes y rollback operativo |
-| `AC-CA-029` | `passed` | 100.000 sujetos/500.000 eventos: proyección 9,310 s, query p95 17,263 ms y backfill 1m11,514 s |
-| `AC-CA-030` | `passed` | test E2E PostgreSQL más contratos de emisión e hidratación del proyecto principal |
+| `AC-CA-029` | `passed` | Dataset distribuido: 100.000 sujetos/500.000 eventos/20 tenants; proyección 4m20,496s, API HTTP p95 23,785 ms y backfill 59,732 s |
+| `AC-CA-030` | `passed` | `scripts/certify_subject_mvp.py`: emisor → HTTP → Redis → resolver → normalización → proyecciones → query → hidratación SQL; lifecycle y rollback con persistencia web |

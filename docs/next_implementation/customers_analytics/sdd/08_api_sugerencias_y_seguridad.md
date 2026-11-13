@@ -107,6 +107,8 @@ Sin contexto se omiten pasos 3 y 4. Contexto desconocido o inactivo informa ese 
 
 No se mezclan conteos. Cada resultado conserva el conteo de su `source_level`.
 
+Cuando se completa una lista contextual parcial con sujetos globales, la trazabilidad de la respuesta indica `source_level=mixed` y `fallback_applied=true`; cada resultado mantiene `context` o `global`. La frescura usa la más antigua de las proyecciones efectivamente utilizadas. Un contexto inactivo informa `inactive_context` y usa global.
+
 ## Estados HTTP
 
 | Estado | Condición |

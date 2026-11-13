@@ -58,6 +58,7 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 	if !availability.Available {
 		return SuggestionResponse{}, ErrProjectionUnavailable
 	}
+	globalAvailability := availability
 	contextResult := map[string]any{}
 	var results []subject.Suggestion
 	if query.ContextKey != "" {
@@ -68,6 +69,11 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 		status := "unregistered"
 		if registered {
 			status = "registered"
+		} else {
+			status, err = useCase.repository.ContextResolutionStatus(ctx, query.ContextKey, query.ContextVersion)
+			if err != nil {
+				return SuggestionResponse{}, err
+			}
 		}
 		if len(contextual) > 0 {
 			availability, err = useCase.repository.ProjectionAvailability(ctx, useCase.version, "subject_context")
@@ -79,6 +85,32 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 			}
 			results = contextual
 			contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": status, "source_level": "context"}
+			if len(results) < query.Limit {
+				global, globalErr := useCase.repository.GlobalSuggestions(ctx, query.TenantID, useCase.version, useCase.globalDays, query.Limit)
+				if globalErr != nil {
+					return SuggestionResponse{}, globalErr
+				}
+				seen := make(map[string]bool, len(results))
+				for _, item := range results {
+					seen[item.ExternalSubjectID] = true
+				}
+				for _, item := range global {
+					if len(results) >= query.Limit {
+						break
+					}
+					if seen[item.ExternalSubjectID] {
+						continue
+					}
+					seen[item.ExternalSubjectID] = true
+					item.SourceLevel = "global"
+					results = append(results, item)
+					contextResult["source_level"] = "mixed"
+					contextResult["fallback_applied"] = true
+					if globalAvailability.ComputedAt.Before(availability.ComputedAt) {
+						availability = globalAvailability
+					}
+				}
+			}
 		} else {
 			contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": status, "source_level": "global", "fallback_applied": true}
 		}

@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"goanalytics/services/worker/internal/application/ports/outbound"
 )
@@ -13,23 +14,31 @@ const contextProjectionName = "subject_context"
 type ProjectContext struct {
 	repository         outbound.ContextProjectionRepository
 	version, batchSize int
+	metrics            outbound.Metrics
 }
 
 // NewProjectContext construye la proyección contextual incremental.
-func NewProjectContext(repository outbound.ContextProjectionRepository, version, batchSize int) (*ProjectContext, error) {
+func NewProjectContext(repository outbound.ContextProjectionRepository, version, batchSize int, metrics ...outbound.Metrics) (*ProjectContext, error) {
 	if repository == nil || version < 1 || batchSize < 1 {
 		return nil, fmt.Errorf("configuración contextual inválida")
 	}
-	return &ProjectContext{repository: repository, version: version, batchSize: batchSize}, nil
+	useCase := &ProjectContext{repository: repository, version: version, batchSize: batchSize}
+	if len(metrics) > 0 {
+		useCase.metrics = metrics[0]
+	}
+	return useCase, nil
 }
 
 // Run ejecuta una proyección protegida por lock independiente.
-func (useCase *ProjectContext) Run(ctx context.Context) error {
+func (useCase *ProjectContext) Run(ctx context.Context) (runErr error) {
+	started, status := time.Now(), "completed"
+	defer func() { observeProjectionRun(useCase.metrics, "context", status, started, runErr) }()
 	lock, acquired, err := useCase.repository.TryLock(ctx, contextProjectionName, useCase.version)
 	if err != nil {
 		return err
 	}
 	if !acquired {
+		status = "skipped_locked"
 		return useCase.repository.RecordSkippedLocked(ctx, contextProjectionName, useCase.version)
 	}
 	defer lock.Release(context.Background())

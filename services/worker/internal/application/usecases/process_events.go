@@ -297,6 +297,14 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 				continue
 			}
 			uc.recordPersistenceOutcome(string(result.Status))
+			if uc.metrics != nil && result.Status == outbound.EventPersistenceInserted {
+				for _, detail := range valid.SubjectDetails {
+					uc.metrics.IncrementCounter("subject_normalization_total", map[string]string{"status": string(detail.NormalizationStatus), "event_name": valid.EventName})
+					if detail.ContextResolutionStatus == subject.ContextUnregistered {
+						uc.metrics.IncrementCounter("subject_unregistered_contexts_total", nil)
+					}
+				}
+			}
 			if err := uc.markDeduplicationKeys(ctx, valid); err != nil && firstErr == nil {
 				firstErr = fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 			}

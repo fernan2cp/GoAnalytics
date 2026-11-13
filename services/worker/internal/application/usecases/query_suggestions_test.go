@@ -15,6 +15,14 @@ type suggestionRepositoryFake struct {
 	contextResults      []subject.Suggestion
 	contextRegistered   bool
 	contextAvailability *subject.ProjectionAvailability
+	contextStatus       string
+}
+
+func (fake *suggestionRepositoryFake) ContextResolutionStatus(context.Context, string, int) (string, error) {
+	if fake.contextStatus != "" {
+		return fake.contextStatus, nil
+	}
+	return "unregistered", nil
 }
 
 func (fake *suggestionRepositoryFake) ContextSuggestions(context.Context, string, string, int, int, int, int) ([]subject.Suggestion, bool, error) {
@@ -33,7 +41,7 @@ func TestQuerySuggestionsUsesExactContextThenGlobalFallback(t *testing.T) {
 	available := subject.ProjectionAvailability{Available: true, ProjectionVersion: 1, ComputedAt: now}
 	repository := &suggestionRepositoryFake{availability: available, results: []subject.Suggestion{{ExternalSubjectID: "global"}}, contextResults: []subject.Suggestion{{ExternalSubjectID: "exact", SourceLevel: "context"}}, contextRegistered: true}
 	useCase := NewQuerySuggestions(repository, 1, 90, 30, 48*time.Hour, true)
-	response, err := useCase.Execute(context.Background(), SuggestionQuery{TenantID: "tenant", Limit: 10, ContextKey: "search", ContextVersion: 1}, now)
+	response, err := useCase.Execute(context.Background(), SuggestionQuery{TenantID: "tenant", Limit: 1, ContextKey: "search", ContextVersion: 1}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +97,16 @@ func TestQuerySuggestionsReportsContextProjectionFreshness(t *testing.T) {
 	useCase.serveStale = true
 	response, err := useCase.Execute(context.Background(), query, now)
 	if err != nil || !response.IsStale || !response.ComputedAt.Equal(old.ComputedAt) {
+		t.Fatalf("response=%#v err=%v", response, err)
+	}
+}
+
+func TestQuerySuggestionsCompletesPartialContextWithoutDuplicates(t *testing.T) {
+	now := time.Now().UTC()
+	repo := &suggestionRepositoryFake{availability: subject.ProjectionAvailability{Available: true, ProjectionVersion: 1, ComputedAt: now}, contextRegistered: true, contextResults: []subject.Suggestion{{ExternalSubjectID: "exact", SourceLevel: "context", AssociationCount: 2}}, results: []subject.Suggestion{{ExternalSubjectID: "exact", SourceLevel: "global", AssociationCount: 99}, {ExternalSubjectID: "other", SourceLevel: "global", AssociationCount: 3}}}
+	useCase := NewQuerySuggestions(repo, 1, 90, 30, 48*time.Hour, true)
+	response, err := useCase.Execute(context.Background(), SuggestionQuery{TenantID: "t", Limit: 2, ContextKey: "search", ContextVersion: 1}, now)
+	if err != nil || len(response.Results) != 2 || response.Results[0].AssociationCount != 2 || response.Results[1].ExternalSubjectID != "other" || response.Context["source_level"] != "mixed" {
 		t.Fatalf("response=%#v err=%v", response, err)
 	}
 }

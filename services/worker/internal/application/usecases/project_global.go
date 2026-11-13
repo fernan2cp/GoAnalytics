@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"goanalytics/services/worker/internal/application/ports/outbound"
 )
@@ -26,15 +27,15 @@ func NewProjectGlobal(repository outbound.GlobalProjectionRepository, metrics ou
 }
 
 // Run ejecuta una sola proyección protegida por advisory lock.
-func (useCase *ProjectGlobal) Run(ctx context.Context) error {
+func (useCase *ProjectGlobal) Run(ctx context.Context) (runErr error) {
+	started, status := time.Now(), "completed"
+	defer func() { observeProjectionRun(useCase.metrics, "global", status, started, runErr) }()
 	lock, acquired, err := useCase.repository.TryLock(ctx, globalProjectionName, useCase.version)
 	if err != nil {
 		return err
 	}
 	if !acquired {
-		if useCase.metrics != nil {
-			useCase.metrics.IncrementCounter("subject_projection_runs_total", map[string]string{"projection": "global", "status": "skipped_locked"})
-		}
+		status = "skipped_locked"
 		return useCase.repository.RecordSkippedLocked(ctx, globalProjectionName, useCase.version)
 	}
 	defer lock.Release(context.Background())
@@ -74,9 +75,6 @@ func (useCase *ProjectGlobal) Run(ctx context.Context) error {
 	}
 	if err = useCase.repository.CompleteRun(ctx, run.ID, checkpoint, len(affected), rowsRead, rowsWritten); err != nil {
 		return err
-	}
-	if useCase.metrics != nil {
-		useCase.metrics.IncrementCounter("subject_projection_runs_total", map[string]string{"projection": "global", "status": "completed"})
 	}
 	return nil
 }

@@ -8,7 +8,8 @@ El binario `cmd/subject-jobs` admite:
 serve
 bootstrap
 project-global
-resolve-contexts
+refresh-registry
+resolve-initial-contexts
 project-context
 ```
 
@@ -27,6 +28,8 @@ SUBJECT_JOBS_HEALTH_HTTP_PORT=8080
 ```
 
 La primera ejecución corre al iniciar si no existe un run completado. Las siguientes corren cuando transcurrieron 86.400 segundos desde el último éxito.
+
+El vencimiento se evalúa para global y contextual por separado. Si contextual falla después de completar global, el siguiente tick vuelve a ejecutar la secuencia sin esperar otro día. Los fallos recuperables se conservan en `/status` y no terminan el scheduler. La query API calcula `computed_at/is_stale` usando la proyección que sirve realmente.
 
 ## Exclusión Mutua
 
@@ -88,6 +91,8 @@ La clave agrega `context_definition_id`. Contextos desconocidos, inactivos o con
 | `subject_associated` | `association_count` y máximo `last_association_at` |
 
 Lifecycle no incrementa contadores.
+
+Los agregados conservan las señales históricas aunque el sujeto esté inactivo. La elegibilidad se filtra contra `analytics_subjects` al consultar; recomputar durante una baja no debe borrar conteos que deban reaparecer tras una reactivación.
 
 ## Ventanas De Consulta
 
