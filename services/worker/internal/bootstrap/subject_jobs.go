@@ -111,7 +111,7 @@ func NewSubjectJobsContainer(ctx context.Context, config Config) (*SubjectJobsCo
 				_ = redisClient.Close()
 				return nil, err
 			}
-			container.Scheduler = usecases.NewProjectionScheduler(projectionRepository, usecases.NewProjectionSequence(container.ProjectGlobal, container.ProjectContext), config.SubjectProjectionVersion, config.SubjectProjectionInterval, config.SubjectJobsCheckInterval)
+			container.Scheduler = usecases.NewProjectionScheduler(projectionRepository, usecases.NewProjectionSequence(container.ProjectGlobal, container.ProjectContext), config.SubjectProjectionVersion, config.SubjectProjectionInterval, config.SubjectJobsCheckInterval, "subject_global", "subject_context")
 		}
 		resolutionRepository, resolutionErr := postgresadapter.NewContextResolutionRepository(pool)
 		if resolutionErr != nil {

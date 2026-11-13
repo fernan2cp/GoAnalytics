@@ -13,7 +13,7 @@ import (
 
 type repositoryFake struct{}
 
-func (repositoryFake) ProjectionAvailability(context.Context, int) (subject.ProjectionAvailability, error) {
+func (repositoryFake) ProjectionAvailability(context.Context, int, ...string) (subject.ProjectionAvailability, error) {
 	return subject.ProjectionAvailability{Available: true, ProjectionVersion: 1, ComputedAt: time.Now()}, nil
 }
 func (repositoryFake) GlobalSuggestions(context.Context, string, int, int, int) ([]subject.Suggestion, error) {

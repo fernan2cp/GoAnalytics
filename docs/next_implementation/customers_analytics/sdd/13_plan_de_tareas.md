@@ -511,12 +511,12 @@ La evidencia de agosto es histórica. Estas tareas reabren la certificación del
 
 ### TASK-CA-0505 — Recuperar Proyecciones Independientes
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Requisitos:** `REQ-CA-032`, `REQ-CA-033`, `REQ-CA-034`, `REQ-CA-058`.
 - **Criterios:** `AC-CA-014`, `AC-CA-023`, `AC-CA-027`.
 - **Dependencias:** `TASK-CA-0504`.
 - **Acciones:** evaluar vencimiento global/contextual por separado y reintentar fallos sin terminar el scheduler; comprobar frescura de la proyección servida.
-- **Evidencia:** pendiente.
+- **Evidencia:** suite worker completa con PostgreSQL/Redis aislados y vet aprobados. Pruebas nuevas verifican global vigente con contextual vencido, supervivencia del scheduler ante fallo temporal y `computed_at/is_stale` de la proyección contextual realmente servida.
 
 ### TASK-CA-0506 — Recertificar Recorrido Cruzado Y Operación
 

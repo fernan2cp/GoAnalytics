@@ -58,10 +58,6 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 	if !availability.Available {
 		return SuggestionResponse{}, ErrProjectionUnavailable
 	}
-	stale := now.Sub(availability.ComputedAt) > useCase.staleAfter
-	if stale && !useCase.serveStale {
-		return SuggestionResponse{}, ErrProjectionStale
-	}
 	contextResult := map[string]any{}
 	var results []subject.Suggestion
 	if query.ContextKey != "" {
@@ -74,6 +70,13 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 			status = "registered"
 		}
 		if len(contextual) > 0 {
+			availability, err = useCase.repository.ProjectionAvailability(ctx, useCase.version, "subject_context")
+			if err != nil {
+				return SuggestionResponse{}, err
+			}
+			if !availability.Available {
+				return SuggestionResponse{}, ErrProjectionUnavailable
+			}
 			results = contextual
 			contextResult = map[string]any{"context_key": query.ContextKey, "context_version": query.ContextVersion, "resolution_status": status, "source_level": "context"}
 		} else {
@@ -88,6 +91,10 @@ func (useCase *QuerySuggestions) Execute(ctx context.Context, query SuggestionQu
 	}
 	if results == nil {
 		results = []subject.Suggestion{}
+	}
+	stale := now.Sub(availability.ComputedAt) > useCase.staleAfter
+	if stale && !useCase.serveStale {
+		return SuggestionResponse{}, ErrProjectionStale
 	}
 	return SuggestionResponse{TenantID: query.TenantID, SubjectType: "customer", Context: contextResult, Window: map[string]int{"context_days": useCase.contextDays, "global_days": useCase.globalDays}, ComputedAt: availability.ComputedAt, ProjectionVersion: availability.ProjectionVersion, IsStale: stale, Results: results}, nil
 }

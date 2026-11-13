@@ -22,9 +22,13 @@ func NewSuggestionRepository(pool *pgxpool.Pool) (*SuggestionRepository, error) 
 }
 
 // ProjectionAvailability obtiene el último run global completado.
-func (repository *SuggestionRepository) ProjectionAvailability(ctx context.Context, version int) (subject.ProjectionAvailability, error) {
+func (repository *SuggestionRepository) ProjectionAvailability(ctx context.Context, version int, names ...string) (subject.ProjectionAvailability, error) {
 	var availability subject.ProjectionAvailability
-	err := repository.pool.QueryRow(ctx, `SELECT projection_version,completed_at FROM analytics_projection_runs WHERE projection_name='subject_global' AND projection_version=$1 AND status='completed' ORDER BY completed_at DESC,id DESC LIMIT 1`, version).Scan(&availability.ProjectionVersion, &availability.ComputedAt)
+	name := "subject_global"
+	if len(names) > 0 {
+		name = names[0]
+	}
+	err := repository.pool.QueryRow(ctx, `SELECT projection_version,completed_at FROM analytics_projection_runs WHERE projection_name=$2 AND projection_version=$1 AND status='completed' ORDER BY completed_at DESC,id DESC LIMIT 1`, version, name).Scan(&availability.ProjectionVersion, &availability.ComputedAt)
 	if err == pgx.ErrNoRows {
 		return availability, nil
 	}
