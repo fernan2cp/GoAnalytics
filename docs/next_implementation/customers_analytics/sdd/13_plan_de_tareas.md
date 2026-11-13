@@ -502,12 +502,12 @@ La evidencia de agosto es histórica. Estas tareas reabren la certificación del
 
 ### TASK-CA-0504 — Asegurar Snapshot Lifecycle De La Fuente
 
-- **Estado:** `pending`
+- **Estado:** `done`
 - **Requisitos:** `REQ-CA-022`, `REQ-CA-026`, `REQ-CA-027`, `REQ-CA-031`.
 - **Criterios:** `AC-CA-010`, `AC-CA-012`, `AC-CA-013`.
 - **Dependencias:** `TASK-CA-0503`.
 - **Acciones:** usar versiones de mutación reales, soportar estados requeridos y probar el cargador real sin depender exclusivamente de filas simuladas.
-- **Evidencia:** pendiente.
+- **Evidencia:** DragonFullAV `d39389878`, rama actual `ui/checkout`. Dieciocho pruebas analytics aprobadas, incluyendo migración tenant `custanalytics01` up/down en PostgreSQL aislado, captura de conversión/bajas, versión persistida estable, merge y loader real. Snapshot puro migrado a application, SQL a adapters; guardrail sin imports de infraestructura. La fuente requiere instalar la migración tenant antes de habilitar el MVP; no se aplicó sobre bases de negocio.
 
 ### TASK-CA-0505 — Recuperar Proyecciones Independientes
 
