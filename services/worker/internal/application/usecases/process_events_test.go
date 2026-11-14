@@ -512,6 +512,114 @@ func TestProcessReturnsPersistenceErrors(t *testing.T) {
 	}
 }
 
+func TestProcessAcceptsPersistentDuplicateAndRefreshesDeduplication(t *testing.T) {
+	raw := validRawEvent()
+	raw.LogicalEventID = "logical-duplicate"
+	repository := &fakeEventRepository{status: outbound.EventPersistenceDuplicateLogical}
+	deduplicator := &fakeDeduplicator{}
+	useCase := newTestProcessUseCase(time.Now(), repository, &fakeRejectedRepository{}, cachedSite(), nil, deduplicator)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if !deduplicator.wasMarked(dedupStrategyLogical, scopedKey(cachedSite(), raw.LogicalEventID)) {
+		t.Fatalf("duplicado persistente no refresco deduplicacion logica")
+	}
+}
+
+func TestProcessPersistsContradictoryIdempotencyConflict(t *testing.T) {
+	raw := validRawEvent()
+	raw.IdempotencyKey = "operation-1"
+	repository := &fakeEventRepository{results: []outbound.EventPersistenceResult{{
+		EventID:         raw.EventID,
+		Status:          outbound.EventPersistenceConflict,
+		ExistingEventID: "existing-event",
+		ConflictField:   "idempotency_key",
+	}}}
+	rejectedRepository := &fakeRejectedRepository{}
+	useCase := newTestProcessUseCase(time.Now(), repository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(rejectedRepository.events) != 1 {
+		t.Fatalf("rechazos = %d, want 1", len(rejectedRepository.events))
+	}
+	got := rejectedRepository.events[0]
+	if got.Reason != rejection.ReasonIdempotencyConflict || got.RawPayload["conflict_field"] != "idempotency_key" || got.RawPayload["existing_event_id"] != "existing-event" {
+		t.Fatalf("rechazo = %#v", got)
+	}
+}
+
+func TestProcessPreservesSuccessfulResultsWhenAnotherEventFails(t *testing.T) {
+	first := validRawEvent()
+	second := validRawEvent()
+	second.EventID = "event-second"
+	second.LogicalEventID = "logical-second"
+	repository := &fakeEventRepository{results: []outbound.EventPersistenceResult{
+		{EventID: first.EventID, Err: errors.New("db caida")},
+		{EventID: second.EventID, Status: outbound.EventPersistenceInserted},
+	}}
+	deduplicator := &fakeDeduplicator{}
+	useCase := newTestProcessUseCase(time.Now(), repository, &fakeRejectedRepository{}, cachedSite(), nil, deduplicator)
+
+	err := useCase.Process(context.Background(), []dto.RawEvent{first, second})
+	if !errors.Is(err, ErrPersistValidEventsFailed) {
+		t.Fatalf("error = %v, want ErrPersistValidEventsFailed", err)
+	}
+	if len(repository.events) != 2 {
+		t.Fatalf("eventos entregados al repositorio = %d, want 2", len(repository.events))
+	}
+	if !deduplicator.wasMarked(dedupStrategyLogical, scopedKey(cachedSite(), second.LogicalEventID)) {
+		t.Fatalf("resultado exitoso posterior no fue confirmado en deduplicacion")
+	}
+}
+
+func TestRecordStreamRejectionStoresOnlySafePayloadMetadata(t *testing.T) {
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	repository := &fakeRejectedRepository{}
+	useCase := &ProcessEventsUseCase{rejectedRepository: repository, clock: fakeClock{now: now}}
+
+	err := useCase.RecordStreamRejection(context.Background(), dto.StreamRejection{
+		StreamID:      "1-0",
+		EventID:       "evt-1",
+		SiteCode:      "site-1",
+		Environment:   "production",
+		Reason:        rejection.ReasonInvalidStreamPayload,
+		Payload:       `{"password":"no-persistir"}`,
+		DeliveryCount: 2,
+	})
+	if err != nil {
+		t.Fatalf("RecordStreamRejection() error = %v", err)
+	}
+	if len(repository.events) != 1 {
+		t.Fatalf("rechazos = %d, want 1", len(repository.events))
+	}
+	got := repository.events[0]
+	if got.EventID != "evt-1" || got.Reason != rejection.ReasonInvalidStreamPayload || !got.CreatedAt.Equal(now) {
+		t.Fatalf("rechazo = %#v", got)
+	}
+	if _, exists := got.RawPayload["payload"]; exists {
+		t.Fatalf("payload crudo no debe persistirse")
+	}
+	if got.RawPayload["payload_sha256"] == "" || got.RawPayload["payload_bytes"] != len([]byte(`{"password":"no-persistir"}`)) {
+		t.Fatalf("metadata segura = %#v", got.RawPayload)
+	}
+}
+
+func TestRecordStreamRejectionReturnsPersistenceError(t *testing.T) {
+	repository := &fakeRejectedRepository{err: errors.New("postgres no disponible")}
+	useCase := &ProcessEventsUseCase{rejectedRepository: repository, clock: fakeClock{now: time.Now()}}
+
+	err := useCase.RecordStreamRejection(context.Background(), dto.StreamRejection{
+		Reason:  rejection.ReasonStreamRetryExhausted,
+		Payload: "{}",
+	})
+	if !errors.Is(err, ErrPersistRejectedFailed) {
+		t.Fatalf("error = %v, want ErrPersistRejectedFailed", err)
+	}
+}
+
 func newTestProcessUseCase(
 	now time.Time,
 	eventRepository *fakeEventRepository,
@@ -545,11 +653,138 @@ func newProcessUseCaseWithPorts(
 	)
 }
 
+func TestProcessPublishesPersistenceOutcomeMetric(t *testing.T) {
+	now := time.Now()
+	eventRepository := &fakeEventRepository{status: outbound.EventPersistenceDuplicateLogical}
+	rejectedRepository := &fakeRejectedRepository{}
+	cache := &fakeSiteCache{config: cachedSite(), found: true}
+	resolver := &fakeSiteResolver{config: cachedSite()}
+	deduplicator := &fakeDeduplicator{}
+	metrics := &processMetricsFake{counters: map[string]int{}}
+	useCase := NewProcessEventsUseCaseWithMetrics(
+		nil, eventRepository, rejectedRepository, cache, resolver, deduplicator,
+		fakeClock{now: now}, nil, RehydrateSiteOptions{}, nil, metrics,
+	)
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{validRawEvent()}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	key := outbound.MetricEventPersistence + ":duplicate_logical"
+	if metrics.counters[key] != 1 {
+		t.Fatalf("metricas = %#v", metrics.counters)
+	}
+}
+
+func TestProcessPropagatesServerSourceSiteAndTimezone(t *testing.T) {
+	now := time.Now()
+	eventRepository := &fakeEventRepository{}
+	rejectedRepository := &fakeRejectedRepository{}
+	config := cachedSite()
+	config.Timezone = "America/Argentina/Buenos_Aires"
+	cache := &fakeSiteCache{config: config, found: true}
+	useCase := newProcessUseCaseWithPorts(
+		now, eventRepository, rejectedRepository, cache,
+		&fakeSiteResolver{config: config}, &fakeDeduplicator{},
+	)
+	raw := validRawEvent()
+	raw.EventSource = site.SourceServer
+	raw.TokenVersion = 0
+	raw.JWTID = ""
+	raw.AnonymousID = ""
+	raw.SessionID = ""
+	raw.Origin = ""
+	raw.URL = ""
+	raw.Path = ""
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(rejectedRepository.events) != 0 || len(eventRepository.events) != 1 {
+		t.Fatalf("persistidos=%d rechazados=%d", len(eventRepository.events), len(rejectedRepository.events))
+	}
+	got := eventRepository.events[0]
+	if got.EventSource != site.SourceServer || got.TenantID != config.TenantID || got.SiteID != config.SiteID || got.Timezone != config.Timezone {
+		t.Fatalf("trazabilidad propagada = %#v", got)
+	}
+	metadata, ok := got.Context["_goanalytics"].(map[string]any)
+	if !ok || metadata["event_source"] != site.SourceServer || metadata["timezone"] != config.Timezone {
+		t.Fatalf("snapshot interno = %#v", got.Context["_goanalytics"])
+	}
+	if len(cache.keys) != 1 || cache.keys[0].Source != site.SourceServer || cache.keys[0].Origin != "" {
+		t.Fatalf("clave de resolución = %#v", cache.keys)
+	}
+}
+
+func TestProcessDoesNotRelaxWebValidation(t *testing.T) {
+	eventRepository := &fakeEventRepository{}
+	rejectedRepository := &fakeRejectedRepository{}
+	useCase := newTestProcessUseCase(time.Now(), eventRepository, rejectedRepository, cachedSite(), nil, &fakeDeduplicator{})
+	raw := validRawEvent()
+	raw.EventSource = site.SourceWeb
+	raw.Origin = ""
+
+	if err := useCase.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process() error = %v", err)
+	}
+	if len(eventRepository.events) != 0 || len(rejectedRepository.events) != 1 || rejectedRepository.events[0].Reason != rejection.ReasonInvalidPayload {
+		t.Fatalf("persistidos=%d rechazos=%#v", len(eventRepository.events), rejectedRepository.events)
+	}
+}
+
+func TestProcessSubjectNormalizationIsOptIn(t *testing.T) {
+	t.Parallel()
+
+	raw := validRawEvent()
+	raw.EventName = "subject_selected"
+	raw.Properties = map[string]any{"subjects": []any{map[string]any{
+		"subject_type": "customer", "subject_id": "customer-1", "relation": "selected",
+	}}}
+	config := cachedSite()
+	config.Timezone = "America/Argentina/Buenos_Aires"
+
+	disabledRepository := &fakeEventRepository{}
+	disabled := newTestProcessUseCase(time.Now(), disabledRepository, &fakeRejectedRepository{}, config, nil, &fakeDeduplicator{})
+	if err := disabled.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process(disabled) error = %v", err)
+	}
+	if len(disabledRepository.events) != 1 || disabledRepository.events[0].SubjectDetails != nil {
+		t.Fatalf("normalización apagada = %#v", disabledRepository.events)
+	}
+
+	enabledRepository := &fakeEventRepository{}
+	enabled := NewProcessEventsUseCaseWithFeatures(
+		nil, enabledRepository, &fakeRejectedRepository{},
+		&fakeSiteCache{config: config, found: true}, &fakeSiteResolver{config: config},
+		&fakeDeduplicator{}, fakeClock{now: time.Now()}, nil,
+		RehydrateSiteOptions{}, nil, nil,
+		ProcessFeatures{SubjectNormalizationEnabled: true},
+	)
+	if err := enabled.Process(context.Background(), []dto.RawEvent{raw}); err != nil {
+		t.Fatalf("Process(enabled) error = %v", err)
+	}
+	if len(enabledRepository.events) != 1 || len(enabledRepository.events[0].SubjectDetails) != 1 {
+		t.Fatalf("normalización encendida = %#v", enabledRepository.events)
+	}
+}
+
+type processMetricsFake struct {
+	counters map[string]int
+}
+
+func (fake *processMetricsFake) IncrementCounter(name string, labels map[string]string) {
+	fake.counters[name+":"+labels["outcome"]]++
+}
+
+func (fake *processMetricsFake) SetGauge(_ string, _ float64, _ map[string]string) {}
+
+func (fake *processMetricsFake) ObserveHistogram(_ string, _ float64, _ map[string]string) {}
+
 func validRawEvent() dto.RawEvent {
 	eventTime := time.Date(2026, 5, 5, 11, 59, 0, 0, time.UTC)
 	receivedAt := time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC)
 	return dto.RawEvent{
 		EventID:      "evt_1",
+		EventSource:  site.SourceWeb,
 		SiteCode:     "pub_site_abc123",
 		Environment:  "production",
 		TokenVersion: 1,
@@ -625,14 +860,27 @@ func cachedSite() site.SiteConfig {
 }
 
 type fakeEventRepository struct {
-	events []event.ValidatedEvent
-	err    error
+	events  []event.ValidatedEvent
+	err     error
+	status  outbound.EventPersistenceStatus
+	results []outbound.EventPersistenceResult
 }
 
-func (fake *fakeEventRepository) SaveBatch(ctx context.Context, events []event.ValidatedEvent) error {
+func (fake *fakeEventRepository) SaveBatch(ctx context.Context, events []event.ValidatedEvent) []outbound.EventPersistenceResult {
 	_ = ctx
 	fake.events = append(fake.events, events...)
-	return fake.err
+	if fake.results != nil {
+		return fake.results
+	}
+	status := fake.status
+	if status == "" {
+		status = outbound.EventPersistenceInserted
+	}
+	results := make([]outbound.EventPersistenceResult, 0, len(events))
+	for _, item := range events {
+		results = append(results, outbound.EventPersistenceResult{EventID: item.EventID, Status: status, Err: fake.err})
+	}
+	return results
 }
 
 type fakeRejectedRepository struct {

@@ -1,0 +1,42 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Pendientes Redis",
+      "type": "stat",
+      "targets": [{"expr": "redis_pending_events_count", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Retries agotados (15m)",
+      "type": "stat",
+      "targets": [{"expr": "increase(redis_retry_exhausted_total[15m])", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Lag de proyección",
+      "type": "timeseries",
+      "targets": [{"expr": "subject_projection_lag_seconds", "legendFormat": "{{projection}}", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Query p95",
+      "type": "timeseries",
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(subject_query_duration_seconds_bucket[15m])))", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["go-analytics", "customers-mvp"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "utc",
+  "title": "GoAnalytics - Estadísticas de clientes",
+  "uid": "goanalytics-customers-mvp",
+  "version": 1
+}

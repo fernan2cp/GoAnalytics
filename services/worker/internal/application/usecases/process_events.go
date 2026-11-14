@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 
@@ -10,6 +11,7 @@ import (
 	"goanalytics/services/worker/internal/domain/event"
 	"goanalytics/services/worker/internal/domain/rejection"
 	"goanalytics/services/worker/internal/domain/site"
+	"goanalytics/services/worker/internal/domain/subject"
 )
 
 // Errores de aplicacion devueltos por el procesamiento del worker.
@@ -33,16 +35,27 @@ var (
 // Debe construirse con NewProcessEventsUseCase. Sus metodos devuelven error
 // cuando una dependencia o validacion impide completar el batch.
 type ProcessEventsUseCase struct {
-	consumer           outbound.EventConsumer
-	eventRepository    outbound.EventRepository
-	rejectedRepository outbound.RejectedEventRepository
-	siteCache          outbound.SiteCache
-	siteResolver       outbound.SiteResolver
-	deduplicator       outbound.Deduplicator
-	clock              outbound.Clock
-	logger             outbound.Logger
-	validateSite       *ValidateSiteUseCase
-	semanticRules      []SemanticDedupRule
+	consumer                    outbound.EventConsumer
+	eventRepository             outbound.EventRepository
+	rejectedRepository          outbound.RejectedEventRepository
+	siteCache                   outbound.SiteCache
+	siteResolver                outbound.SiteResolver
+	deduplicator                outbound.Deduplicator
+	clock                       outbound.Clock
+	logger                      outbound.Logger
+	validateSite                *ValidateSiteUseCase
+	semanticRules               []SemanticDedupRule
+	metrics                     outbound.Metrics
+	subjectNormalizationEnabled bool
+	contextRegistry             *ContextRegistryLoader
+}
+
+// ProcessFeatures controla capacidades opt-in del procesamiento crítico.
+type ProcessFeatures struct {
+	// SubjectNormalizationEnabled habilita detalles 1:N de sujetos.
+	SubjectNormalizationEnabled bool
+	// ContextRegistry habilita resolución exacta sin alterar eventos legacy.
+	ContextRegistry *ContextRegistryLoader
 }
 
 // NewProcessEventsUseCase crea el caso de uso de procesamiento de eventos.
@@ -96,18 +109,70 @@ func NewProcessEventsUseCaseWithOptions(
 	rehydrateOptions RehydrateSiteOptions,
 	semanticRules []SemanticDedupRule,
 ) *ProcessEventsUseCase {
+	return NewProcessEventsUseCaseWithMetrics(
+		consumer, eventRepository, rejectedRepository, siteCache, siteResolver,
+		deduplicator, clock, logger, rehydrateOptions, semanticRules, nil,
+	)
+}
+
+// NewProcessEventsUseCaseWithMetrics crea el caso de uso con observabilidad.
+//
+// Conserva las opciones de rehidratación y deduplicación e incorpora un puerto
+// opcional de métricas. Un puerto nil desactiva observaciones sin afectar el
+// resultado funcional.
+func NewProcessEventsUseCaseWithMetrics(
+	consumer outbound.EventConsumer,
+	eventRepository outbound.EventRepository,
+	rejectedRepository outbound.RejectedEventRepository,
+	siteCache outbound.SiteCache,
+	siteResolver outbound.SiteResolver,
+	deduplicator outbound.Deduplicator,
+	clock outbound.Clock,
+	logger outbound.Logger,
+	rehydrateOptions RehydrateSiteOptions,
+	semanticRules []SemanticDedupRule,
+	metrics outbound.Metrics,
+) *ProcessEventsUseCase {
+	return NewProcessEventsUseCaseWithFeatures(
+		consumer, eventRepository, rejectedRepository, siteCache, siteResolver,
+		deduplicator, clock, logger, rehydrateOptions, semanticRules, metrics,
+		ProcessFeatures{},
+	)
+}
+
+// NewProcessEventsUseCaseWithFeatures crea el caso de uso con flags explícitos.
+//
+// Recibe los puertos, opciones existentes, métricas y capacidades opt-in. Las
+// capacidades apagadas no agregan escrituras ni cambian contratos legacy.
+func NewProcessEventsUseCaseWithFeatures(
+	consumer outbound.EventConsumer,
+	eventRepository outbound.EventRepository,
+	rejectedRepository outbound.RejectedEventRepository,
+	siteCache outbound.SiteCache,
+	siteResolver outbound.SiteResolver,
+	deduplicator outbound.Deduplicator,
+	clock outbound.Clock,
+	logger outbound.Logger,
+	rehydrateOptions RehydrateSiteOptions,
+	semanticRules []SemanticDedupRule,
+	metrics outbound.Metrics,
+	features ProcessFeatures,
+) *ProcessEventsUseCase {
 	rehydrateSite := NewRehydrateSiteUseCase(siteResolver, siteCache, rehydrateOptions)
 	return &ProcessEventsUseCase{
-		consumer:           consumer,
-		eventRepository:    eventRepository,
-		rejectedRepository: rejectedRepository,
-		siteCache:          siteCache,
-		siteResolver:       siteResolver,
-		deduplicator:       deduplicator,
-		clock:              clock,
-		logger:             logger,
-		validateSite:       NewValidateSiteUseCase(siteCache, rehydrateSite),
-		semanticRules:      semanticRules,
+		consumer:                    consumer,
+		eventRepository:             eventRepository,
+		rejectedRepository:          rejectedRepository,
+		siteCache:                   siteCache,
+		siteResolver:                siteResolver,
+		deduplicator:                deduplicator,
+		clock:                       clock,
+		logger:                      logger,
+		validateSite:                NewValidateSiteUseCase(siteCache, rehydrateSite),
+		semanticRules:               semanticRules,
+		metrics:                     metrics,
+		subjectNormalizationEnabled: features.SubjectNormalizationEnabled,
+		contextRegistry:             features.ContextRegistry,
 	}
 }
 
@@ -126,6 +191,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 
 	validEvents := make([]event.ValidatedEvent, 0, len(events))
 	rejectedEvents := make([]rejection.RejectedEvent, 0)
+	rawByEventID := make(map[string]dto.RawEvent, len(events))
 
 	for _, raw := range events {
 		if err := validateRawEvent(raw); err != nil {
@@ -169,6 +235,10 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			continue
 		}
 		validEvent := buildValidatedEvent(raw, config, dedupStrategy)
+		if uc.subjectNormalizationEnabled {
+			validEvent.SubjectDetails = normalizeSubjectDetails(validEvent)
+			uc.resolveSubjectContexts(ctx, &validEvent)
+		}
 		validEvent.ItemDetails = buildItemDetails(validEvent)
 		validEvent.OrderDetail = buildOrderDetail(validEvent)
 		itemDedupStrategy, itemDuplicateReason, err := uc.evaluateItemSpecificDedup(ctx, validEvent)
@@ -180,6 +250,7 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 			continue
 		}
 		validEvents = append(validEvents, validEvent)
+		rawByEventID[validEvent.EventID] = raw
 	}
 
 	if len(rejectedEvents) > 0 {
@@ -188,14 +259,148 @@ func (uc *ProcessEventsUseCase) Process(ctx context.Context, events []dto.RawEve
 		}
 	}
 	if len(validEvents) > 0 {
-		if err := uc.eventRepository.SaveBatch(ctx, validEvents); err != nil {
-			return fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, err)
+		results := uc.eventRepository.SaveBatch(ctx, validEvents)
+		if len(results) != len(validEvents) {
+			return fmt.Errorf("%w: resultados=%d eventos=%d", ErrPersistValidEventsFailed, len(results), len(validEvents))
 		}
-		for _, valid := range validEvents {
-			if err := uc.markDeduplicationKeys(ctx, valid); err != nil {
-				return fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
+		persistenceRejected := make([]rejection.RejectedEvent, 0)
+		var firstErr error
+		for index, result := range results {
+			valid := validEvents[index]
+			if result.EventID != valid.EventID {
+				uc.recordPersistenceOutcome("invalid_result")
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: resultado fuera de orden para %s", ErrPersistValidEventsFailed, valid.EventID)
+				}
+				continue
+			}
+			if result.Err != nil {
+				uc.recordPersistenceOutcome("error")
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: %v", ErrPersistValidEventsFailed, result.Err)
+				}
+				continue
+			}
+			if result.Status == outbound.EventPersistenceConflict {
+				uc.recordPersistenceOutcome(string(result.Status))
+				rejected := uc.buildRejectedEvent(rawByEventID[valid.EventID], rejection.ReasonIdempotencyConflict, rejection.SeverityWarning, valid.DedupStrategy)
+				rejected.RawPayload["conflict_field"] = result.ConflictField
+				rejected.RawPayload["existing_event_id"] = result.ExistingEventID
+				persistenceRejected = append(persistenceRejected, rejected)
+				continue
+			}
+			if !result.IsIdempotentSuccess() {
+				uc.recordPersistenceOutcome("unknown")
+				if firstErr == nil {
+					firstErr = fmt.Errorf("%w: estado desconocido %q", ErrPersistValidEventsFailed, result.Status)
+				}
+				continue
+			}
+			uc.recordPersistenceOutcome(string(result.Status))
+			if uc.metrics != nil && result.Status == outbound.EventPersistenceInserted {
+				for _, detail := range valid.SubjectDetails {
+					uc.metrics.IncrementCounter("subject_normalization_total", map[string]string{"status": string(detail.NormalizationStatus), "event_name": valid.EventName})
+					if detail.ContextResolutionStatus == subject.ContextUnregistered {
+						uc.metrics.IncrementCounter("subject_unregistered_contexts_total", nil)
+					}
+				}
+			}
+			if err := uc.markDeduplicationKeys(ctx, valid); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("%w: %v", ErrDeduplicationFailed, err)
 			}
 		}
+		if len(persistenceRejected) > 0 {
+			if err := uc.rejectedRepository.SaveBatch(ctx, persistenceRejected); err != nil && firstErr == nil {
+				firstErr = fmt.Errorf("%w: %v", ErrPersistRejectedFailed, err)
+			}
+		}
+		if firstErr != nil {
+			return firstErr
+		}
+	}
+	return nil
+}
+
+// resolveSubjectContexts aplica la revisión activa a los detalles válidos.
+//
+// Ante indisponibilidad conserva el evento y deja el estado sin resolver; el
+// registro nunca convierte un fallo auxiliar en pérdida del evento crudo.
+func (uc *ProcessEventsUseCase) resolveSubjectContexts(ctx context.Context, valid *event.ValidatedEvent) {
+	if uc.contextRegistry == nil || valid == nil {
+		return
+	}
+	registry, err := uc.contextRegistry.Active(ctx)
+	if err != nil {
+		return
+	}
+	if snapshot, ok := valid.Context["_goanalytics"].(map[string]any); ok {
+		snapshot["context_registry_revision"] = registry.RegistryRevision
+	}
+	for index := range valid.SubjectDetails {
+		detail := &valid.SubjectDetails[index]
+		if detail.NormalizationStatus != subject.NormalizationNormalized {
+			continue
+		}
+		detail.ContextRegistryRevisionID = &registry.ID
+		if detail.ContextKey == "" || detail.ContextVersion == nil {
+			detail.ContextResolutionStatus = subject.ContextFamilyUnresolved
+			continue
+		}
+		definition, found := registry.Resolve(detail.ContextKey, *detail.ContextVersion)
+		if !found {
+			detail.ContextResolutionStatus = subject.ContextUnregistered
+			continue
+		}
+		detail.ContextDefinitionID = &definition.ID
+		detail.ResolvedContextFamily = definition.ContextFamily
+		if definition.Status == "inactive" {
+			detail.ContextResolutionStatus = subject.ContextInactive
+		} else {
+			detail.ContextResolutionStatus = subject.ContextRegistered
+		}
+	}
+}
+
+// recordPersistenceOutcome registra un resultado durable con labels acotados.
+func (uc *ProcessEventsUseCase) recordPersistenceOutcome(outcome string) {
+	if uc != nil && uc.metrics != nil {
+		uc.metrics.IncrementCounter(outbound.MetricEventPersistence, map[string]string{"outcome": outcome})
+	}
+}
+
+// RecordStreamRejection persiste el rechazo durable de un mensaje de stream.
+//
+// Recibe contexto y dto.StreamRejection con identificadores opcionales,
+// motivo, payload y cantidad de entregas. Devuelve error cuando faltan las
+// dependencias requeridas, el motivo no pertenece al contrato de transporte o
+// PostgreSQL no puede guardar el rechazo.
+//
+// El payload no se almacena: se conserva solamente su hash SHA-256, longitud y
+// metadata operativa para evitar exponer contenido que no pudo validarse.
+func (uc *ProcessEventsUseCase) RecordStreamRejection(ctx context.Context, input dto.StreamRejection) error {
+	if uc == nil || uc.rejectedRepository == nil || uc.clock == nil {
+		return ErrProcessDependencyMissing
+	}
+	if input.Reason != rejection.ReasonInvalidStreamPayload && input.Reason != rejection.ReasonStreamRetryExhausted {
+		return fmt.Errorf("motivo de rechazo de stream invalido: %s", input.Reason)
+	}
+	payloadHash := sha256.Sum256([]byte(input.Payload))
+	rejected := rejection.RejectedEvent{
+		EventID:     input.EventID,
+		SiteCode:    input.SiteCode,
+		Environment: input.Environment,
+		Reason:      input.Reason,
+		Severity:    rejection.SeverityWarning,
+		RawPayload: map[string]any{
+			"stream_id":      input.StreamID,
+			"delivery_count": input.DeliveryCount,
+			"payload_bytes":  len([]byte(input.Payload)),
+			"payload_sha256": fmt.Sprintf("%x", payloadHash),
+		},
+		CreatedAt: uc.clock.Now(),
+	}
+	if err := uc.rejectedRepository.SaveBatch(ctx, []rejection.RejectedEvent{rejected}); err != nil {
+		return fmt.Errorf("%w: %v", ErrPersistRejectedFailed, err)
 	}
 	return nil
 }
@@ -223,7 +428,8 @@ func (uc *ProcessEventsUseCase) ensureDependencies() error {
 // Recibe dto.RawEvent y devuelve error de dominio si falta algun campo
 // requerido para procesamiento. No consulta cache, resolver ni repositorios.
 func validateRawEvent(raw dto.RawEvent) error {
-	return event.ValidateRequiredFields(
+	return event.ValidateRequiredFieldsForSource(
+		raw.EventSource,
 		raw.EventID,
 		raw.SiteCode,
 		raw.Environment,
@@ -245,6 +451,7 @@ func validateRawEvent(raw dto.RawEvent) error {
 // Recibe dto.RawEvent y site.SiteConfig ya validados. Devuelve
 // event.ValidatedEvent listo para persistir mediante EventRepository.
 func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy string) event.ValidatedEvent {
+	source, _ := site.NormalizeSource(raw.EventSource)
 	return event.ValidatedEvent{
 		EventID:                raw.EventID,
 		LogicalEventID:         raw.LogicalEventID,
@@ -253,6 +460,7 @@ func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy
 		Sequence:               raw.Sequence,
 		PreviousLogicalEventID: raw.PreviousLogicalEventID,
 		DedupStrategy:          dedupStrategy,
+		EventSource:            source,
 		TenantID:               config.TenantID,
 		SiteID:                 config.SiteID,
 		SiteCode:               raw.SiteCode,
@@ -274,9 +482,28 @@ func buildValidatedEvent(raw dto.RawEvent, config site.SiteConfig, dedupStrategy
 		SDKVersion:             raw.SDKVersion,
 		JWTID:                  raw.JWTID,
 		TokenVersion:           raw.TokenVersion,
+		Timezone:               config.Timezone,
 		Properties:             event.NormalizeMap(raw.Properties),
-		Context:                event.NormalizeMap(raw.Context),
+		Context:                buildValidatedContext(raw.Context, source, config.Timezone),
 	}
+}
+
+// buildValidatedContext agrega snapshots internos sin mutar el payload crudo.
+//
+// Conserva las claves del contexto recibido y reemplaza la clave reservada
+// `_goanalytics` con source y timezone resueltos. Esto permite reconstruir la
+// decisión aplicada aun antes de que exista un detalle normalizado de sujeto.
+func buildValidatedContext(rawContext map[string]any, source string, timezone string) map[string]any {
+	contextSnapshot := make(map[string]any, len(rawContext)+1)
+	for key, value := range rawContext {
+		contextSnapshot[key] = value
+	}
+	contextSnapshot["_goanalytics"] = map[string]any{
+		"event_source":              source,
+		"timezone":                  timezone,
+		"context_registry_revision": "",
+	}
+	return contextSnapshot
 }
 
 // buildRejectedEvent arma un rechazo auditable para un evento crudo.
@@ -302,6 +529,7 @@ func (uc *ProcessEventsUseCase) buildRejectedEvent(raw dto.RawEvent, reason stri
 			"sequence":                  raw.Sequence,
 			"previous_logical_event_id": raw.PreviousLogicalEventID,
 			"event_name":                raw.EventName,
+			"event_source":              raw.EventSource,
 			"event_version":             raw.EventVersion,
 			"path":                      raw.Path,
 			"dedup_strategy":            dedupStrategy,

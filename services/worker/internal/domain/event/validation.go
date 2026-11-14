@@ -11,6 +11,13 @@ import (
 // al consumir, validar o persistir eventos.
 var ErrInvalidRawEvent = errors.New("evento crudo invalido")
 
+const (
+	// SourceWeb identifica eventos del endpoint público con navegación.
+	SourceWeb = "web"
+	// SourceServer identifica eventos internos sin sesión ni navegación.
+	SourceServer = "server"
+)
+
 // ValidateRequiredFields comprueba los campos minimos de un evento crudo.
 //
 // Recibe los campos ya mapeados desde dto.RawEvent y valida identificadores,
@@ -34,6 +41,41 @@ func ValidateRequiredFields(
 	rawURL string,
 	path string,
 ) error {
+	return ValidateRequiredFieldsForSource(
+		SourceWeb, eventID, siteCode, environment, tokenVersion, jwtID,
+		eventName, eventVersion, eventTimeIsZero, anonymousID, sessionID,
+		origin, rawURL, path,
+	)
+}
+
+// ValidateRequiredFieldsForSource valida campos mínimos según origen.
+//
+// Para web conserva exactamente sesión o anonymous ID, token, JWT y
+// navegación. Para server exige identidad del evento, site, entorno, nombre,
+// versión y tiempo, sin requerir campos propios del navegador.
+func ValidateRequiredFieldsForSource(
+	source string,
+	eventID string,
+	siteCode string,
+	environment string,
+	tokenVersion int,
+	jwtID string,
+	eventName string,
+	eventVersion int,
+	eventTimeIsZero bool,
+	anonymousID string,
+	sessionID string,
+	origin string,
+	rawURL string,
+	path string,
+) error {
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "" {
+		source = SourceWeb
+	}
+	if source != SourceWeb && source != SourceServer {
+		return ErrInvalidRawEvent
+	}
 	if strings.TrimSpace(eventID) == "" {
 		return ErrInvalidRawEvent
 	}
@@ -41,12 +83,6 @@ func ValidateRequiredFields(
 		return ErrInvalidRawEvent
 	}
 	if strings.TrimSpace(environment) == "" {
-		return ErrInvalidRawEvent
-	}
-	if tokenVersion <= 0 {
-		return ErrInvalidRawEvent
-	}
-	if strings.TrimSpace(jwtID) == "" {
 		return ErrInvalidRawEvent
 	}
 	if strings.TrimSpace(eventName) == "" {
@@ -58,17 +94,16 @@ func ValidateRequiredFields(
 	if eventTimeIsZero {
 		return ErrInvalidRawEvent
 	}
-	if strings.TrimSpace(anonymousID) == "" && strings.TrimSpace(sessionID) == "" {
-		return ErrInvalidRawEvent
-	}
-	if strings.TrimSpace(origin) == "" {
-		return ErrInvalidRawEvent
-	}
-	if strings.TrimSpace(rawURL) == "" {
-		return ErrInvalidRawEvent
-	}
-	if strings.TrimSpace(path) == "" {
-		return ErrInvalidRawEvent
+	if source == SourceWeb {
+		if tokenVersion <= 0 || strings.TrimSpace(jwtID) == "" {
+			return ErrInvalidRawEvent
+		}
+		if strings.TrimSpace(anonymousID) == "" && strings.TrimSpace(sessionID) == "" {
+			return ErrInvalidRawEvent
+		}
+		if strings.TrimSpace(origin) == "" || strings.TrimSpace(rawURL) == "" || strings.TrimSpace(path) == "" {
+			return ErrInvalidRawEvent
+		}
 	}
 	return nil
 }

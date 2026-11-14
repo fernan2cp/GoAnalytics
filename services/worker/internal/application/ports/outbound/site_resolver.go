@@ -8,9 +8,8 @@ import (
 
 // ResolveSiteInput representa la entrada del resolver interno de site.
 //
-// Incluye site_code, origin, environment y token_version para solicitar
-// rehidratacion de metadata. Se usa como DTO de aplicacion hacia el puerto
-// SiteResolver.
+// Incluye site_code, origin, environment, token_version y source para solicitar
+// rehidratacion de metadata. Source vacio conserva el contrato web legacy.
 //
 // Debe contener datos suficientes para que el backend principal resuelva el
 // site real. No devuelve errores por si mismo.
@@ -19,6 +18,7 @@ type ResolveSiteInput struct {
 	Origin       string
 	Environment  string
 	TokenVersion int
+	Source       string
 }
 
 // SiteResolver define el puerto para rehidratar metadata de site.

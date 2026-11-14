@@ -12,8 +12,32 @@ import (
 
 	"goanalytics/services/worker/internal/application/dto"
 	"goanalytics/services/worker/internal/application/ports/outbound"
-	"goanalytics/services/worker/internal/application/usecases"
+	"goanalytics/services/worker/internal/domain/rejection"
 )
+
+// streamClient limita las operaciones Redis requeridas por el consumer.
+//
+// Permite usar el cliente real o un doble de pruebas sin exponer comandos que
+// no pertenecen al ciclo de consumo. Cada metodo devuelve el comando tipado de
+// go-redis y reporta sus fallas mediante Result o Err.
+type streamClient interface {
+	XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) *goredis.StatusCmd
+	XReadGroup(ctx context.Context, args *goredis.XReadGroupArgs) *goredis.XStreamSliceCmd
+	XAutoClaim(ctx context.Context, args *goredis.XAutoClaimArgs) *goredis.XAutoClaimCmd
+	XPending(ctx context.Context, stream string, group string) *goredis.XPendingCmd
+	XPendingExt(ctx context.Context, args *goredis.XPendingExtArgs) *goredis.XPendingExtCmd
+	XAck(ctx context.Context, stream string, group string, ids ...string) *goredis.IntCmd
+}
+
+// eventProcessor define las operaciones de aplicacion usadas por el adapter.
+//
+// Procesa eventos ya mapeados y registra rechazos de transporte durables. Las
+// implementaciones devuelven error para impedir XACK cuando no hubo resultado
+// persistente.
+type eventProcessor interface {
+	Process(ctx context.Context, events []dto.RawEvent) error
+	RecordStreamRejection(ctx context.Context, input dto.StreamRejection) error
+}
 
 // Consumer consume eventos desde Redis Stream y ejecuta el worker.
 //
@@ -21,14 +45,22 @@ import (
 // logger. Es un adaptador inbound: conoce Redis y orquesta el ciclo de vida,
 // pero delega reglas de negocio al ProcessEventsUseCase.
 type Consumer struct {
-	client       goredis.UniversalClient
-	streamName   string
-	groupName    string
-	consumerName string
-	batchSize    int
-	pollInterval time.Duration
-	process      *usecases.ProcessEventsUseCase
-	logger       outbound.Logger
+	client                streamClient
+	streamName            string
+	groupName             string
+	consumerName          string
+	batchSize             int
+	pollInterval          time.Duration
+	pendingClaimEnabled   bool
+	pendingMinIdle        time.Duration
+	pendingClaimInterval  time.Duration
+	pendingClaimBatchSize int
+	maxDeliveries         int64
+	lastPendingClaim      time.Time
+	now                   func() time.Time
+	process               eventProcessor
+	logger                outbound.Logger
+	metrics               outbound.Metrics
 }
 
 // Config contiene la configuracion del consumer Redis Stream.
@@ -36,11 +68,16 @@ type Consumer struct {
 // Agrupa nombres de stream, grupo, consumidor, tamano de batch e intervalo de
 // espera entre lecturas vacias. Debe construirse desde bootstrap.
 type Config struct {
-	StreamName   string
-	GroupName    string
-	ConsumerName string
-	BatchSize    int
-	PollInterval time.Duration
+	StreamName            string
+	GroupName             string
+	ConsumerName          string
+	BatchSize             int
+	PollInterval          time.Duration
+	PendingClaimEnabled   bool
+	PendingMinIdle        time.Duration
+	PendingClaimInterval  time.Duration
+	PendingClaimBatchSize int
+	MaxDeliveries         int64
 }
 
 // NewConsumer crea un consumer Redis Stream.
@@ -48,10 +85,21 @@ type Config struct {
 // Recibe cliente Redis, configuracion, caso de uso y logger. Devuelve error si
 // falta alguna dependencia o dato requerido. Normaliza batch e intervalo.
 func NewConsumer(
-	client goredis.UniversalClient,
+	client streamClient,
 	config Config,
-	process *usecases.ProcessEventsUseCase,
+	process eventProcessor,
 	logger outbound.Logger,
+) (*Consumer, error) {
+	return NewConsumerWithMetrics(client, config, process, logger, nil)
+}
+
+// NewConsumerWithMetrics crea un consumer con observabilidad opcional.
+func NewConsumerWithMetrics(
+	client streamClient,
+	config Config,
+	process eventProcessor,
+	logger outbound.Logger,
+	metrics outbound.Metrics,
 ) (*Consumer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("cliente redis requerido")
@@ -74,15 +122,34 @@ func NewConsumer(
 	if config.PollInterval <= 0 {
 		config.PollInterval = time.Second
 	}
+	if config.PendingMinIdle <= 0 {
+		config.PendingMinIdle = 60 * time.Second
+	}
+	if config.PendingClaimInterval <= 0 {
+		config.PendingClaimInterval = 30 * time.Second
+	}
+	if config.PendingClaimBatchSize <= 0 {
+		config.PendingClaimBatchSize = 100
+	}
+	if config.MaxDeliveries <= 0 {
+		config.MaxDeliveries = 5
+	}
 	return &Consumer{
-		client:       client,
-		streamName:   config.StreamName,
-		groupName:    config.GroupName,
-		consumerName: config.ConsumerName,
-		batchSize:    config.BatchSize,
-		pollInterval: config.PollInterval,
-		process:      process,
-		logger:       logger,
+		client:                client,
+		streamName:            config.StreamName,
+		groupName:             config.GroupName,
+		consumerName:          config.ConsumerName,
+		batchSize:             config.BatchSize,
+		pollInterval:          config.PollInterval,
+		pendingClaimEnabled:   config.PendingClaimEnabled,
+		pendingMinIdle:        config.PendingMinIdle,
+		pendingClaimInterval:  config.PendingClaimInterval,
+		pendingClaimBatchSize: config.PendingClaimBatchSize,
+		maxDeliveries:         config.MaxDeliveries,
+		now:                   time.Now,
+		process:               process,
+		logger:                logger,
+		metrics:               metrics,
 	}, nil
 }
 
@@ -107,6 +174,16 @@ func (consumer *Consumer) Run(ctx context.Context) error {
 		default:
 		}
 
+		if consumer.shouldClaimPending() {
+			consumer.lastPendingClaim = consumer.now()
+			if err := consumer.claimPending(ctx); err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return nil
+				}
+				consumer.logError(ctx, "fallo recuperacion de pendientes redis", map[string]any{"error": err.Error()})
+			}
+		}
+
 		messages, err := consumer.read(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -119,24 +196,193 @@ func (consumer *Consumer) Run(ctx context.Context) error {
 		if len(messages) == 0 {
 			continue
 		}
+		consumer.processMessages(ctx, messages, nil)
+	}
+}
 
-		events, ids, err := mapMessages(messages)
+// shouldClaimPending indica si corresponde ejecutar una recuperacion.
+//
+// No recibe parametros y usa el reloj del consumer. Devuelve false cuando la
+// capacidad esta deshabilitada o aun no vencio el intervalo configurado.
+func (consumer *Consumer) shouldClaimPending() bool {
+	if !consumer.pendingClaimEnabled {
+		return false
+	}
+	return consumer.lastPendingClaim.IsZero() || consumer.now().Sub(consumer.lastPendingClaim) >= consumer.pendingClaimInterval
+}
+
+// claimPending reclama y procesa mensajes abandonados por otros consumers.
+//
+// Recibe contexto y recorre XAUTOCLAIM desde 0-0 hasta completar el scan.
+// Devuelve error cuando Redis no puede reclamar o consultar entregas. Los
+// errores individuales de persistencia se registran y dejan el mensaje
+// pendiente sin detener el resto del lote reclamado.
+func (consumer *Consumer) claimPending(ctx context.Context) error {
+	consumer.updatePendingGauge(ctx)
+	start := "0-0"
+	for {
+		messages, next, err := consumer.client.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
+			Stream:   consumer.streamName,
+			Group:    consumer.groupName,
+			Consumer: consumer.consumerName,
+			MinIdle:  consumer.pendingMinIdle,
+			Start:    start,
+			Count:    int64(consumer.pendingClaimBatchSize),
+		}).Result()
+		if err == goredis.Nil {
+			return nil
+		}
 		if err != nil {
-			consumer.logError(ctx, "fallo mapeo de eventos crudos", map[string]any{"error": err.Error()})
-			continue
+			return err
 		}
-		if err := consumer.process.Process(ctx, events); err != nil {
-			consumer.logError(ctx, "fallo procesamiento de batch", map[string]any{
-				"error": err.Error(),
-				"count": len(events),
-			})
-			continue
+		consumer.incrementCounter(outbound.MetricRedisAutoclaim)
+		if len(messages) > 0 {
+			deliveries, err := consumer.pendingDeliveryCounts(ctx, messages)
+			if err != nil {
+				return err
+			}
+			consumer.processMessages(ctx, messages, deliveries)
 		}
-		if err := consumer.ack(ctx, ids); err != nil {
-			consumer.logError(ctx, "fallo confirmacion redis stream", map[string]any{"error": err.Error()})
-			continue
+		if next == "0-0" {
+			return nil
 		}
-		consumer.logInfo(ctx, "batch procesado", map[string]any{"count": len(events)})
+		start = next
+	}
+}
+
+// updatePendingGauge publica el tamaño actual del PEL sin afectar el consumo.
+func (consumer *Consumer) updatePendingGauge(ctx context.Context) {
+	if consumer.metrics == nil {
+		return
+	}
+	pending, err := consumer.client.XPending(ctx, consumer.streamName, consumer.groupName).Result()
+	if err != nil {
+		consumer.logError(ctx, "fallo consulta de pendientes para metricas", map[string]any{"error": err.Error()})
+		return
+	}
+	consumer.metrics.SetGauge(outbound.MetricRedisPendingEvents, float64(pending.Count), nil)
+}
+
+// pendingDeliveryCounts consulta la cantidad de entregas de mensajes reclamados.
+//
+// Recibe contexto y mensajes que ya pertenecen al consumer actual. Devuelve
+// un mapa por ID o error cuando XPENDING no puede confirmar el contador.
+func (consumer *Consumer) pendingDeliveryCounts(ctx context.Context, messages []goredis.XMessage) (map[string]int64, error) {
+	deliveries := make(map[string]int64, len(messages))
+	for _, message := range messages {
+		pending, err := consumer.client.XPendingExt(ctx, &goredis.XPendingExtArgs{
+			Stream: consumer.streamName,
+			Group:  consumer.groupName,
+			Start:  message.ID,
+			End:    message.ID,
+			Count:  1,
+		}).Result()
+		if err != nil {
+			return nil, err
+		}
+		if len(pending) == 0 || pending[0].ID != message.ID {
+			return nil, fmt.Errorf("mensaje pendiente %s sin contador de entregas", message.ID)
+		}
+		deliveries[message.ID] = pending[0].RetryCount
+	}
+	return deliveries, nil
+}
+
+// processMessages procesa y confirma mensajes de forma independiente.
+//
+// Recibe mensajes y contadores opcionales para recuperados. No devuelve error:
+// registra cada fallo y conserva pendiente solo el mensaje afectado.
+func (consumer *Consumer) processMessages(ctx context.Context, messages []goredis.XMessage, deliveries map[string]int64) {
+	for _, message := range messages {
+		deliveryCount := int64(1)
+		if count, ok := deliveries[message.ID]; ok {
+			deliveryCount = count
+		}
+		consumer.processMessage(ctx, message, deliveryCount)
+	}
+}
+
+// processMessage procesa un unico mensaje y confirma solo un resultado durable.
+//
+// Recibe contexto, mensaje Redis y cantidad de entregas. Los mensajes agotados
+// o invalidos se registran como rechazo; los validos se delegan a application.
+func (consumer *Consumer) processMessage(ctx context.Context, message goredis.XMessage, deliveryCount int64) {
+	if deliveryCount >= consumer.maxDeliveries {
+		consumer.rejectAndAck(ctx, message, deliveryCount, rejection.ReasonStreamRetryExhausted)
+		return
+	}
+	event, err := mapMessage(message)
+	if err != nil {
+		consumer.rejectAndAck(ctx, message, deliveryCount, rejection.ReasonInvalidStreamPayload)
+		return
+	}
+	if err := consumer.process.Process(ctx, []dto.RawEvent{event}); err != nil {
+		consumer.logError(ctx, "fallo procesamiento de mensaje", map[string]any{
+			"stream_id":    message.ID,
+			"event_id":     event.EventID,
+			"event_source": event.EventSource,
+			"error":        err.Error(),
+		})
+		return
+	}
+	if err := consumer.ack(ctx, []string{message.ID}); err != nil {
+		consumer.logError(ctx, "fallo confirmacion redis stream", map[string]any{
+			"stream_id": message.ID,
+			"error":     err.Error(),
+		})
+		return
+	}
+	consumer.logInfo(ctx, "mensaje procesado", map[string]any{
+		"stream_id":    message.ID,
+		"event_id":     event.EventID,
+		"event_source": event.EventSource,
+	})
+}
+
+// rejectAndAck persiste un rechazo de transporte antes de confirmar Redis.
+//
+// Recibe mensaje, entregas y motivo estable. Si application o XACK fallan,
+// registra el error y conserva el mensaje pendiente para un intento posterior.
+func (consumer *Consumer) rejectAndAck(ctx context.Context, message goredis.XMessage, deliveryCount int64, reason string) {
+	payload := messagePayload(message)
+	eventID, siteCode, environment := extractStreamIdentity(payload)
+	if err := consumer.process.RecordStreamRejection(ctx, dto.StreamRejection{
+		StreamID:      message.ID,
+		EventID:       eventID,
+		SiteCode:      siteCode,
+		Environment:   environment,
+		Reason:        reason,
+		Payload:       payload,
+		DeliveryCount: deliveryCount,
+	}); err != nil {
+		consumer.logError(ctx, "fallo persistencia de rechazo de stream", map[string]any{
+			"stream_id": message.ID,
+			"reason":    reason,
+			"error":     err.Error(),
+		})
+		return
+	}
+	if err := consumer.ack(ctx, []string{message.ID}); err != nil {
+		consumer.logError(ctx, "fallo confirmacion de rechazo de stream", map[string]any{
+			"stream_id": message.ID,
+			"reason":    reason,
+			"error":     err.Error(),
+		})
+		return
+	}
+	consumer.logInfo(ctx, "mensaje rechazado y confirmado", map[string]any{
+		"stream_id":      message.ID,
+		"reason":         reason,
+		"delivery_count": deliveryCount,
+	})
+	if reason == rejection.ReasonStreamRetryExhausted {
+		consumer.incrementCounter(outbound.MetricRedisRetryExhausted)
+	}
+}
+
+func (consumer *Consumer) incrementCounter(name string) {
+	if consumer.metrics != nil {
+		consumer.metrics.IncrementCounter(name, nil)
 	}
 }
 
@@ -198,26 +444,48 @@ func (consumer *Consumer) logError(ctx context.Context, message string, attrs ma
 	}
 }
 
-// mapMessages convierte mensajes Redis a DTOs de aplicacion.
+// mapMessage convierte un mensaje Redis individual a DTO de aplicacion.
 //
-// Recibe mensajes XREADGROUP y devuelve eventos crudos junto con sus IDs de
-// stream. Devuelve error si falta payload o si el JSON no cumple el contrato.
-func mapMessages(messages []goredis.XMessage) ([]dto.RawEvent, []string, error) {
-	events := make([]dto.RawEvent, 0, len(messages))
-	ids := make([]string, 0, len(messages))
-	for _, message := range messages {
-		payloadValue, ok := message.Values["payload"]
-		if !ok {
-			return nil, nil, fmt.Errorf("mensaje %s sin payload", message.ID)
-		}
-		raw, err := decodeRawEvent(fmt.Sprint(payloadValue))
-		if err != nil {
-			return nil, nil, fmt.Errorf("mensaje %s invalido: %w", message.ID, err)
-		}
-		events = append(events, raw)
-		ids = append(ids, message.ID)
+// Recibe XMessage y devuelve RawEvent. Devuelve error con el ID de stream si
+// falta payload o el JSON no cumple el contrato de transporte.
+func mapMessage(message goredis.XMessage) (dto.RawEvent, error) {
+	payloadValue, ok := message.Values["payload"]
+	if !ok {
+		return dto.RawEvent{}, fmt.Errorf("mensaje %s sin payload", message.ID)
 	}
-	return events, ids, nil
+	raw, err := decodeRawEvent(fmt.Sprint(payloadValue))
+	if err != nil {
+		return dto.RawEvent{}, fmt.Errorf("mensaje %s invalido: %w", message.ID, err)
+	}
+	return raw, nil
+}
+
+// messagePayload obtiene el payload textual disponible en el mensaje.
+//
+// Recibe XMessage y devuelve cadena vacia cuando el campo no existe. No
+// interpreta ni valida el contenido.
+func messagePayload(message goredis.XMessage) string {
+	payload, ok := message.Values["payload"]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprint(payload)
+}
+
+// extractStreamIdentity recupera identificadores no sensibles de un JSON.
+//
+// Recibe payload textual y devuelve event_id, site_code y env cuando pueden
+// decodificarse como strings. Un JSON invalido produce valores vacios.
+func extractStreamIdentity(payload string) (string, string, string) {
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		return "", "", ""
+	}
+	stringValue := func(key string) string {
+		value, _ := decoded[key].(string)
+		return value
+	}
+	return stringValue("event_id"), stringValue("site_code"), stringValue("env")
 }
 
 // decodeRawEvent parsea el JSON publicado por la ingesta.
@@ -236,6 +504,7 @@ func decodeRawEvent(payload string) (dto.RawEvent, error) {
 		TabID:                  raw.TabID,
 		Sequence:               raw.Sequence,
 		PreviousLogicalEventID: raw.PreviousLogicalEventID,
+		EventSource:            normalizeEventSource(raw.EventSource),
 		SiteCode:               raw.SiteCode,
 		Environment:            raw.Environment,
 		TokenVersion:           raw.TokenVersion,
@@ -267,6 +536,17 @@ func normalizeEventVersion(version int) int {
 	return version
 }
 
+// normalizeEventSource preserva compatibilidad con mensajes previos al campo.
+//
+// Una fuente vacía se interpreta como web; otros valores se conservan para
+// que domain produzca un rechazo estable en vez de ocultar el dato inválido.
+func normalizeEventSource(source string) string {
+	if strings.TrimSpace(source) == "" {
+		return "web"
+	}
+	return strings.ToLower(strings.TrimSpace(source))
+}
+
 type streamRawEvent struct {
 	EventID                string         `json:"event_id"`
 	LogicalEventID         string         `json:"logical_event_id"`
@@ -274,6 +554,7 @@ type streamRawEvent struct {
 	TabID                  string         `json:"tab_id"`
 	Sequence               int64          `json:"sequence"`
 	PreviousLogicalEventID string         `json:"previous_logical_event_id"`
+	EventSource            string         `json:"event_source"`
 	SiteCode               string         `json:"site_code"`
 	Environment            string         `json:"env"`
 	TokenVersion           int            `json:"token_version"`

@@ -22,12 +22,14 @@ type Config struct {
 	HTTPHost string
 	HTTPPort int
 
-	JWTAlgorithm         string
-	GoAnalyticsJWTSecret string
-	JWTIssuer            string
-	JWTAudience          string
-	JWTExpirationMinutes int
-	HideAuthFailures     bool
+	JWTAlgorithm                 string
+	GoAnalyticsJWTSecret         string
+	JWTIssuer                    string
+	JWTAudience                  string
+	JWTExpirationMinutes         int
+	HideAuthFailures             bool
+	SubjectInternalEventsEnabled bool
+	SubjectEventsAPIToken        string
 
 	RedisAddr     string
 	RedisUsername string
@@ -63,11 +65,12 @@ func LoadConfig(dotenvPath string) (Config, error) {
 
 		HTTPHost: getEnv("INGEST_HTTP_HOST", "0.0.0.0"),
 
-		JWTAlgorithm:         getEnv("JWT_ALGORITHM", "HS256"),
-		GoAnalyticsJWTSecret: getEnv("GO_ANALYTICS_JWT_SECRET", ""),
-		JWTIssuer:            getEnv("JWT_ISSUER", "main-backend"),
-		JWTAudience:          getEnv("JWT_AUDIENCE", "analytics-ingest"),
-		JWTExpirationMinutes: 30,
+		JWTAlgorithm:          getEnv("JWT_ALGORITHM", "HS256"),
+		GoAnalyticsJWTSecret:  getEnv("GO_ANALYTICS_JWT_SECRET", ""),
+		JWTIssuer:             getEnv("JWT_ISSUER", "main-backend"),
+		JWTAudience:           getEnv("JWT_AUDIENCE", "analytics-ingest"),
+		JWTExpirationMinutes:  30,
+		SubjectEventsAPIToken: getEnv("SUBJECT_EVENTS_API_TOKEN", ""),
 
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisUsername: getEnv("REDIS_USERNAME", ""),
@@ -124,6 +127,12 @@ func LoadConfig(dotenvPath string) (Config, error) {
 	}
 	if config.HideAuthFailures, err = getEnvBool("INGEST_HIDE_AUTH_FAILURES", false); err != nil {
 		return Config{}, err
+	}
+	if config.SubjectInternalEventsEnabled, err = getEnvBool("SUBJECT_INTERNAL_EVENTS_ENABLED", false); err != nil {
+		return Config{}, err
+	}
+	if config.SubjectInternalEventsEnabled && strings.TrimSpace(config.SubjectEventsAPIToken) == "" {
+		return Config{}, fmt.Errorf("SUBJECT_EVENTS_API_TOKEN requerido cuando SUBJECT_INTERNAL_EVENTS_ENABLED=true")
 	}
 
 	if strings.ToUpper(config.JWTAlgorithm) != "HS256" {

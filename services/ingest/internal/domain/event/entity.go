@@ -18,6 +18,7 @@ type RawEvent struct {
 	TabID                  string         `json:"tab_id,omitempty"`
 	Sequence               int64          `json:"sequence,omitempty"`
 	PreviousLogicalEventID string         `json:"previous_logical_event_id,omitempty"`
+	EventSource            string         `json:"event_source"`
 	SiteCode               string         `json:"site_code"`
 	Environment            string         `json:"env"`
 	TokenVersion           int            `json:"token_version"`

@@ -51,8 +51,19 @@ func NewReadyHandler(check ReadinessCheck) http.Handler {
 // Recibe handlers de liveness y readiness. Devuelve un http.Handler aislado de
 // la API de negocio; solo debe exponerse para healthchecks locales.
 func NewRouter(healthHandler http.Handler, readyHandler http.Handler) http.Handler {
+	return NewRouterWithMetrics(healthHandler, readyHandler, nil)
+}
+
+// NewRouterWithMetrics crea el router operativo con exposición Prometheus.
+//
+// Conserva health y readiness separados. Registra /metrics solo cuando recibe
+// un handler, permitiendo tests y procesos futuros con un exporter propio.
+func NewRouterWithMetrics(healthHandler http.Handler, readyHandler http.Handler, metricsHandler http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/health", healthHandler)
 	mux.Handle("/ready", readyHandler)
+	if metricsHandler != nil {
+		mux.Handle("/metrics", metricsHandler)
+	}
 	return mux
 }

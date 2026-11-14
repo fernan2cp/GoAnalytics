@@ -10,8 +10,10 @@ import (
 
 	"goanalytics/services/worker/internal/adapters/inbound/httphealth"
 	"goanalytics/services/worker/internal/adapters/inbound/redisstream"
+	"goanalytics/services/worker/internal/adapters/outbound/httpregistry"
 	"goanalytics/services/worker/internal/adapters/outbound/httpresolver"
 	loggeradapter "goanalytics/services/worker/internal/adapters/outbound/logger"
+	metricsadapter "goanalytics/services/worker/internal/adapters/outbound/metrics"
 	postgresadapter "goanalytics/services/worker/internal/adapters/outbound/postgres"
 	redisadapter "goanalytics/services/worker/internal/adapters/outbound/redis"
 	"goanalytics/services/worker/internal/adapters/outbound/system"
@@ -91,7 +93,21 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		return nil, err
 	}
 
-	process := usecases.NewProcessEventsUseCaseWithOptions(
+	metricsRegistry := metricsadapter.NewRegistry()
+	var contextRegistry *usecases.ContextRegistryLoader
+	if config.SubjectContextRegistryEnabled {
+		registryCache := redisadapter.NewContextRegistryCache(redisClient, config.SubjectContextRegistryTTL, config.SubjectContextRegistryLockTTL)
+		registryRepository, registryErr := postgresadapter.NewContextRegistryRepository(pgPool)
+		if registryErr != nil {
+			return nil, registryErr
+		}
+		registrySource, registryErr := httpregistry.NewClient(config.SubjectContextRegistryURL, config.SubjectContextRegistryToken, config.SubjectContextRegistryTimeout)
+		if registryErr != nil {
+			return nil, registryErr
+		}
+		contextRegistry = usecases.NewContextRegistryLoader(registryCache, registryCache, registryRepository, registrySource).WithMetrics(metricsRegistry)
+	}
+	process := usecases.NewProcessEventsUseCaseWithFeatures(
 		nil,
 		eventRepository,
 		rejectedRepository,
@@ -102,14 +118,21 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		appLogger,
 		usecases.RehydrateSiteOptions{SiteCacheTTL: config.SiteCacheTTL},
 		config.SemanticDedupRules,
+		metricsRegistry,
+		usecases.ProcessFeatures{SubjectNormalizationEnabled: config.SubjectAnalyticsEnabled, ContextRegistry: contextRegistry},
 	)
-	consumer, err := redisstream.NewConsumer(redisClient, redisstream.Config{
-		StreamName:   config.EventStreamName,
-		GroupName:    config.WorkerConsumerGroup,
-		ConsumerName: config.WorkerName,
-		BatchSize:    config.WorkerBatchSize,
-		PollInterval: config.WorkerPollInterval,
-	}, process, appLogger)
+	consumer, err := redisstream.NewConsumerWithMetrics(redisClient, redisstream.Config{
+		StreamName:            config.EventStreamName,
+		GroupName:             config.WorkerConsumerGroup,
+		ConsumerName:          config.WorkerName,
+		BatchSize:             config.WorkerBatchSize,
+		PollInterval:          config.WorkerPollInterval,
+		PendingClaimEnabled:   config.WorkerPendingClaimEnabled,
+		PendingMinIdle:        config.WorkerPendingMinIdle,
+		PendingClaimInterval:  config.WorkerPendingClaimInterval,
+		PendingClaimBatchSize: config.WorkerPendingClaimBatchSize,
+		MaxDeliveries:         config.WorkerMaxDeliveries,
+	}, process, appLogger, metricsRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +149,7 @@ func NewContainer(ctx context.Context, config Config) (*Container, error) {
 		Postgres:    pgPool,
 		Logger:      appLogger,
 		Consumer:    consumer,
-		Health:      httphealth.NewRouter(httphealth.NewHealthHandler(), readyHandler),
+		Health:      httphealth.NewRouterWithMetrics(httphealth.NewHealthHandler(), readyHandler, metricsRegistry.Handler()),
 	}, nil
 }
 

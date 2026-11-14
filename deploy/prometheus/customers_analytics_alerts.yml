@@ -1,0 +1,47 @@
+groups:
+  - name: go-analytics-customers-mvp
+    rules:
+      - alert: GoAnalyticsRedisPendingOld
+        expr: redis_pending_events_count > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hay eventos pendientes en Redis por más de cinco minutos"
+          runbook: "docs/operations/customers_analytics_runbook.md#pendientes-redis"
+      - alert: GoAnalyticsRedisRetryExhausted
+        expr: increase(redis_retry_exhausted_total[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Un evento agotó sus entregas Redis"
+          runbook: "docs/operations/customers_analytics_runbook.md#pendientes-redis"
+      - alert: GoAnalyticsSubjectProjectionFailed
+        expr: increase(subject_projection_runs_total{status="failed"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Falló una proyección de sujetos"
+          runbook: "docs/operations/customers_analytics_runbook.md#proyeccion-fallida-o-vencida"
+      - alert: GoAnalyticsSubjectProjectionStale
+        expr: subject_projection_lag_seconds > 172800
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "La proyección de sujetos superó 48 horas de antigüedad"
+          runbook: "docs/operations/customers_analytics_runbook.md#proyeccion-fallida-o-vencida"
+      - alert: GoAnalyticsSubjectQueryLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(subject_query_duration_seconds_bucket[15m]))) > 0.3
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "La query API supera 300 ms de p95"
+      - alert: GoAnalyticsSubjectQueryErrors
+        expr: sum(rate(subject_query_requests_total{status=~"5.."}[15m])) / clamp_min(sum(rate(subject_query_requests_total[15m])), 0.001) > 0.01
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "La query API supera 1% de errores 5xx"

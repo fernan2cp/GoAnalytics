@@ -9,7 +9,7 @@ import (
 
 // SiteCacheKey representa la identidad de cache para metadata de site.
 //
-// Incluye site_code, origin, environment y token_version porque esos datos
+// Incluye site_code, origin, environment, token_version y source porque esos datos
 // determinan la resolucion y validacion posterior de un evento. Debe
 // construirse desde application con datos ya extraidos del evento crudo.
 type SiteCacheKey struct {
@@ -17,6 +17,7 @@ type SiteCacheKey struct {
 	Origin       string
 	Environment  string
 	TokenVersion int
+	Source       string
 }
 
 // SiteCache define el puerto para cachear metadata de site.
