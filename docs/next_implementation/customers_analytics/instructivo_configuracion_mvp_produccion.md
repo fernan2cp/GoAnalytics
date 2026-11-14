@@ -72,6 +72,11 @@ La lista `SUBJECT_ANALYTICS_SUGGESTION_TENANTS` debe ser explícita en producci�
 
 ## 4. Procesos y orden de activación
 
+Para aplicar migraciones de GoAnalytics desde las variables `POSTGRES_*` del
+contenedor, usar el [ejecutor y overlay de producción](../../../deploy/migrations/README.md).
+Incluye dependencias que impiden iniciar los cuatro servicios si falla `up`;
+las migraciones tenant de DragonFullAV siguen siendo un paso independiente.
+
 1. Aplicar las migraciones aditivas hasta `008`.
    Aplicar `custanalytics01` en los tenants fuente y activar su captura SQL explícitamente antes de habilitar los endpoints. Los flags de aplicación siguen apagados hasta completar esta preparación.
 2. Crear o verificar el stream Redis y el grupo del worker.

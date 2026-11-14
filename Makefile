@@ -30,13 +30,13 @@ logs-follow:
 	docker compose logs -f
 
 migrate-up:
-	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" up
+	docker compose --profile tools run --rm --build migrate
 
 migrate-down:
-	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" down 1
+	docker compose --profile tools run --rm --entrypoint migrate migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" down 1
 
 migrate-force:
-	docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" force $(VERSION)
+	docker compose --profile tools run --rm --entrypoint migrate migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" force $(VERSION)
 
 build-worker-image:
 	docker build --build-arg WORKER_COMMAND=worker -f services/worker/Dockerfile -t $(ANALYTICS_IMAGE_PREFIX)-worker:local .

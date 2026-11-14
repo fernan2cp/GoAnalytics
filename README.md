@@ -88,7 +88,7 @@ make migrate-force VERSION=<version_number>
 ### 3. Ejecución Directa con Docker Compose
 Si no dispones de `make`, ejecuta la herramienta de migración directamente a través de Docker Compose activando el perfil `tools`:
 ```bash
-docker compose --profile tools run --rm migrate -path=/migrations -database "postgres://analytics:analytics@postgres_analytics:5432/analytics?sslmode=disable" up
+docker compose --profile tools run --rm --build migrate
 ```
 
 ---
