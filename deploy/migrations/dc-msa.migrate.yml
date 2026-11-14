@@ -1,0 +1,34 @@
+# Overlay para el dc-msa.yml de producción; no contiene secretos.
+services:
+  analytics-migrate:
+    build:
+      context: ${PROJECT_ROOT}/dockers/msa/go-analytics
+      dockerfile: deploy/migrations/Dockerfile
+    restart: "no"
+    env_file:
+      - ${PROJECT_ROOT}/envs/ve_go_analytics.env
+      - ${PROJECT_ROOT}/envs/ve_go_analytics_share.env
+    volumes:
+      - ${PROJECT_ROOT}/dockers/msa/go-analytics/migrations/postgres:/migrations:ro
+    networks:
+      - av_net
+
+  analytics-ingest:
+    depends_on:
+      analytics-migrate:
+        condition: service_completed_successfully
+
+  analytics-worker:
+    depends_on:
+      analytics-migrate:
+        condition: service_completed_successfully
+
+  analytics-subject-jobs:
+    depends_on:
+      analytics-migrate:
+        condition: service_completed_successfully
+
+  analytics-query-api:
+    depends_on:
+      analytics-migrate:
+        condition: service_completed_successfully

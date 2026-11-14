@@ -99,20 +99,25 @@ services:
           - postgres_analytics
 
   migrate:
-    image: migrate/migrate:v4.17.1
+    build:
+      context: .
+      dockerfile: deploy/migrations/Dockerfile
     profiles: ["tools"]
+    env_file:
+      - .env.example
+    environment:
+      POSTGRES_HOST: postgres_analytics
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-analytics}
+      POSTGRES_DB: ${POSTGRES_DB:-analytics}
+      POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+    restart: "no"
     volumes:
       - ./migrations/postgres:/migrations:ro
     depends_on:
       postgres_analytics:
         condition: service_healthy
-    entrypoint: ["migrate"]
-    command:
-      [
-        "-path=/migrations",
-        "-database=postgres://${POSTGRES_USER:-analytics}:${POSTGRES_PASSWORD:-analytics}@postgres_analytics:5432/${POSTGRES_DB:-analytics}?sslmode=${POSTGRES_SSLMODE:-disable}",
-        "up"
-      ]
     networks:
       - go_network
 
