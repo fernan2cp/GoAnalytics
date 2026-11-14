@@ -6,6 +6,8 @@ Este instructivo resume la configuración necesaria para activar las estadístic
 
 - GoAnalytics y DragonFullAV deben poder resolverse y conectarse por HTTP desde sus respectivos procesos.
 - GoAnalytics debe tener PostgreSQL con las migraciones hasta la versión `008` y Redis con el stream configurado.
+- Redis debe soportar `XAUTOCLAIM` (versión 6.2 o posterior). No es necesario cambiar la versión de PostgreSQL únicamente por este MVP; usar la versión soportada por el despliegue existente.
+- Reconstruir las imágenes de worker, jobs y query desde el Dockerfile actualizado: ahora instala `tzdata` para resolver zonas IANA como `America/Argentina/Buenos_Aires`.
 - DragonFullAV debe tener la revisión tenant `custanalytics01` aplicada antes de habilitar snapshot o emisión. La captura SQL queda apagada por defecto: activar en cada tenant que publique el snapshot con `SELECT analytics_customer_lifecycle_configure(true);`. La función sincroniza el estado inicial y conserva versiones monotónicas; no ejecutarla sobre un tenant ajeno al rollout.
 - El snapshot MVP conserva sus revisiones en memoria durante dos horas: usar un único worker para ese endpoint o afinidad de instancia durante toda la paginación. Tras reiniciar la fuente, un corte expirado requiere un bootstrap nuevo explícito.
 - El proyecto principal debe exponer los endpoints internos de snapshot y registro de contextos.
@@ -84,6 +86,8 @@ La lista `SUBJECT_ANALYTICS_SUGGESTION_TENANTS` debe ser explícita en producci�
 11. Activar el consumo de sugerencias para los tenants habilitados.
 
 En Docker Compose de desarrollo, los servicios equivalentes son `analytics-subject-jobs-devel` y `analytics-query-api-devel`. En producción deben conservar el mismo contrato de procesos, healthchecks y variables, aunque la orquestación sea distinta.
+
+`docker-compose-devel.yml` es local y está ignorado por Git: sus cambios no llegan al servidor mediante el merge. Actualizar el compose efectivo del servidor agregando jobs (`build.args.WORKER_COMMAND=subject-jobs`, comando `--mode serve`) y query (`WORKER_COMMAND=query-api`), ambos con `services/worker/Dockerfile`, el entorno real y la misma red privada. El `docker-compose.yml` versionado de la raíz es un sandbox con `.env.example` y no incluye estos procesos nuevos.
 
 Para ejecutar un job puntual sin colisionar con la IP fija del servicio de desarrollo ya iniciado:
 
